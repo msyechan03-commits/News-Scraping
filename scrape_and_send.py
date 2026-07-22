@@ -24,11 +24,12 @@ import anthropic
 
 # ---------------------------------------------------------------------------
 # 1. Sumber berita (RSS). Tambah/kurangi sesuai selera.
+# CNBC/CNN Indonesia diblokir (HTTP 403) dari IP GitHub Actions, jadi pakai
+# Google News RSS (aggregator lintas media, tidak memblokir IP cloud).
 # ---------------------------------------------------------------------------
 RSS_FEEDS = [
-    "https://www.cnbcindonesia.com/market/rss/",
-    "https://www.cnbcindonesia.com/news/rss",
-    "https://www.cnnindonesia.com/ekonomi/rss",
+    "https://news.google.com/rss/search?q=ekonomi+indonesia+when:1d&hl=id&gl=ID&ceid=ID:id",
+    "https://news.google.com/rss/search?q=bisnis+OR+market+OR+bursa+indonesia+when:1d&hl=id&gl=ID&ceid=ID:id",
 ]
 
 HOURS_LOOKBACK = 20  # ambil berita dari X jam terakhir (jalan tiap pagi)
