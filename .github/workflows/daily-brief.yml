@@ -6,6 +6,9 @@ on:
     - cron: "30 23 * * *"
   workflow_dispatch: {}   # supaya bisa juga dijalankan manual dari tab "Actions" kalau perlu
 
+permissions:
+  contents: write   # perlu untuk commit+push PDF hasil generate ke repo
+
 jobs:
   send-digest:
     runs-on: ubuntu-latest
@@ -16,14 +19,31 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Install system dependencies (WeasyPrint butuh Pango/Cairo)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0 libffi-dev libcairo2
+
+      - name: Install Python dependencies
         run: pip install -r requirements.txt
 
-      - name: Run scraper & kirim WhatsApp
+      - name: Generate rangkuman & PDF
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python scrape_and_send.py generate
+
+      - name: Commit & push PDF ke repo (supaya punya URL publik)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add output/digest.pdf
+          git commit -m "chore: update rangkuman harian $(date -u +'%Y-%m-%d')" || echo "Tidak ada perubahan untuk di-commit"
+          git push
+
+      - name: Kirim PDF ke WhatsApp lewat Twilio
+        env:
           TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
           TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
           TWILIO_WHATSAPP_FROM: ${{ secrets.TWILIO_WHATSAPP_FROM }}
           TWILIO_WHATSAPP_TO: ${{ secrets.TWILIO_WHATSAPP_TO }}
-        run: python scrape_and_send.py
+        run: python scrape_and_send.py send
