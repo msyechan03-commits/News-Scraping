@@ -49,10 +49,16 @@ def fetch_recent_entries():
     for url in RSS_FEEDS:
         try:
             resp = requests.get(url, headers=HEADERS, timeout=15)
-            feed = feedparser.parse(resp.content)
         except requests.RequestException as exc:
             print(f"Gagal ambil feed {url}: {exc}", file=sys.stderr)
             continue
+
+        feed = feedparser.parse(resp.content)
+        print(
+            f"  {url} -> HTTP {resp.status_code}, {len(resp.content)} bytes, "
+            f"{len(feed.entries)} entri, bozo={feed.bozo}"
+            + (f", bozo_exception={feed.bozo_exception}" if feed.bozo else "")
+        )
 
         for e in feed.entries:
             pub = None
