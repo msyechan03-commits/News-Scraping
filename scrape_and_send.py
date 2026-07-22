@@ -185,7 +185,7 @@ Isi juga "report_title" (judul laporan) dan "highlight" (1-2 kalimat insight pal
 
     resp = client.with_options(max_retries=6).messages.create(
         model="claude-sonnet-5",
-        max_tokens=4000,
+        max_tokens=8000,
         thinking={"type": "disabled"},
         output_config={"format": {"type": "json_schema", "schema": REPORT_SCHEMA}},
         messages=[{"role": "user", "content": prompt}],
