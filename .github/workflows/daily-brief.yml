@@ -1,0 +1,29 @@
+name: Rangkuman Berita Ekonomi Harian
+
+on:
+  schedule:
+    # 23:30 UTC = 06:30 WIB (Jakarta). Ubah sesuai jam yang Anda mau.
+    - cron: "30 23 * * *"
+  workflow_dispatch: {}   # supaya bisa juga dijalankan manual dari tab "Actions" kalau perlu
+
+jobs:
+  send-digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run scraper & kirim WhatsApp
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_WHATSAPP_FROM: ${{ secrets.TWILIO_WHATSAPP_FROM }}
+          TWILIO_WHATSAPP_TO: ${{ secrets.TWILIO_WHATSAPP_TO }}
+        run: python scrape_and_send.py
