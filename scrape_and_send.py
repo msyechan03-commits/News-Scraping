@@ -27,7 +27,9 @@ import datetime
 import html
 import json
 import os
+import re
 import sys
+import time
 
 import anthropic
 import feedparser
@@ -147,18 +149,42 @@ REPORT_SCHEMA = {
 }
 
 
+DEFAULT_TITLE = "Rangkuman Berita Ekonomi Harian"
+
+
+def _extract_scalar(raw: str, key: str) -> str:
+    """Ambil satu field string dari JSON (mentah/terpotong) via regex, lalu unescape."""
+    m = re.search(rf'"{key}"\s*:\s*("(?:[^"\\]|\\.)*")', raw)
+    if not m:
+        return ""
+    try:
+        return json.loads(m.group(1))
+    except json.JSONDecodeError:
+        return ""
+
+
+def _normalize_report(data: dict) -> dict:
+    """Pastikan semua key wajib ada & bertipe benar, isi default kalau kosong."""
+    return {
+        "caption": data.get("caption") or "Rangkuman berita ekonomi hari ini.",
+        "report_title": data.get("report_title") or DEFAULT_TITLE,
+        "highlight": data.get("highlight") or "",
+        "sections": data.get("sections") if isinstance(data.get("sections"), list) else [],
+    }
+
+
 def summarize_with_claude(entries: list) -> dict:
     if not entries:
         return {
             "caption": "Tidak ada berita ekonomi baru yang terdeteksi pagi ini.",
-            "report_title": "Rangkuman Berita Ekonomi Harian",
+            "report_title": DEFAULT_TITLE,
             "highlight": "Tidak ada berita ekonomi baru yang terdeteksi pagi ini.",
             "sections": [],
         }
 
     raw_text = "\n\n".join(
         f"Judul: {it['title']}\nCuplikan: {it['summary']}\nLink: {it['link']}"
-        for it in entries[:40]  # batasi biar tidak kepanjangan
+        for it in entries[:30]  # batasi biar tidak kepanjangan
     )
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
@@ -184,9 +210,8 @@ Buatkan DUA versi rangkuman dari berita-berita di atas:
 Isi juga "report_title" (judul laporan) dan "highlight" (1-2 kalimat insight paling penting hari ini, terpisah dari caption)."""
 
     resp = client.with_options(max_retries=6).messages.create(
-        model="claude-sonnet-5",
-        max_tokens=12000,
-        thinking={"type": "disabled"},
+        model="claude-haiku-4-5",
+        max_tokens=8000,
         output_config={"format": {"type": "json_schema", "schema": REPORT_SCHEMA}},
         messages=[{"role": "user", "content": prompt}],
     )
@@ -197,11 +222,23 @@ Isi juga "report_title" (judul laporan) dan "highlight" (1-2 kalimat insight pal
     raw_json = "\n".join(text_blocks).strip()
 
     try:
-        return json.loads(raw_json)
+        return _normalize_report(json.loads(raw_json))
     except json.JSONDecodeError:
-        print(f"  Gagal parse JSON (panjang={len(raw_json)}). 500 karakter terakhir:", file=sys.stderr)
-        print(raw_json[-500:], file=sys.stderr)
-        raise
+        # JSON kepotong (mis. kena max_tokens). Jangan crash & buang seluruh run -
+        # selamatkan minimal caption/highlight (field pertama, biasanya utuh) via
+        # regex, kirim tanpa sections detail. Caption WhatsApp tetap terkirim.
+        print(
+            f"  JSON tidak lengkap (panjang={len(raw_json)}, stop_reason={resp.stop_reason}) - "
+            f"pakai fallback caption-only.",
+            file=sys.stderr,
+        )
+        salvaged = {
+            "caption": _extract_scalar(raw_json, "caption"),
+            "report_title": _extract_scalar(raw_json, "report_title"),
+            "highlight": _extract_scalar(raw_json, "highlight"),
+            "sections": [],
+        }
+        return _normalize_report(salvaged)
 
 
 # ---------------------------------------------------------------------------
@@ -399,6 +436,22 @@ def send_whatsapp_pdf(caption: str):
     media_url = get_pdf_public_url()
     print(f"URL PDF publik: {media_url}")
 
+    # raw.githubusercontent.com kadang butuh beberapa detik ter-update setelah push
+    # (CDN lag). Pastikan PDF sudah bisa diakses (HTTP 200) sebelum Twilio fetch,
+    # supaya kiriman tidak gagal karena media 404.
+    for attempt in range(6):
+        try:
+            check = requests.head(media_url, timeout=15, allow_redirects=True)
+            if check.status_code == 200:
+                print(f"PDF siap diakses (percobaan {attempt + 1}).")
+                break
+            print(f"PDF belum siap (HTTP {check.status_code}), tunggu 10 detik...")
+        except requests.RequestException as exc:
+            print(f"Gagal cek URL PDF ({exc}), tunggu 10 detik...")
+        time.sleep(10)
+    else:
+        print("Peringatan: PDF belum terkonfirmasi bisa diakses; tetap coba kirim.", file=sys.stderr)
+
     url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json"
 
     # Body/caption Twilio WhatsApp dibatasi ~1600 karakter; potong kalau perlu.
@@ -430,8 +483,9 @@ def cmd_generate():
 
     print("Merangkum dengan Claude...")
     data = summarize_with_claude(entries)
+    caption = data.get("caption", "")
     print("--- CAPTION ---")
-    print(data["caption"])
+    print(caption)
 
     date_str = datetime.datetime.now(
         datetime.timezone(datetime.timedelta(hours=7))
@@ -442,7 +496,7 @@ def cmd_generate():
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     with open(CAPTION_PATH, "w", encoding="utf-8") as f:
-        f.write(data["caption"])
+        f.write(caption)
     print(f"Caption disimpan: {CAPTION_PATH}")
 
 
