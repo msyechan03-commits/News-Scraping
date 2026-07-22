@@ -177,22 +177,31 @@ Buatkan DUA versi rangkuman dari berita-berita di atas:
    - Total maksimal ±300-400 kata, bahasa Indonesia, ringkas, tanpa markdown heading (#).
 
 2. "sections" - versi lebih panjang & detail untuk laporan PDF:
-   - Kelompokkan berita jadi beberapa kategori (misal: Makroekonomi & Kebijakan, Pasar & Bursa, Sektor & Korporasi, Global).
-   - Tiap item: judul, 2-4 kalimat penjelasan (lebih detail dari caption), dan link sumber asli beritanya (ambil dari field Link di atas, jangan dikarang).
-   - Cakup lebih banyak berita daripada versi caption (boleh 10-20 item total).
+   - Kelompokkan berita jadi maksimal 4 kategori (misal: Makroekonomi & Kebijakan, Pasar & Bursa, Sektor & Korporasi, Global).
+   - Tiap item: judul, MAKSIMAL 2 kalimat penjelasan (lebih detail dari caption tapi tetap ringkas), dan link sumber asli beritanya (ambil dari field Link di atas, jangan dikarang).
+   - Total SELURUH kategori maksimal 12 item (bukan per kategori) - pilih yang paling penting saja, jangan kepanjangan.
 
 Isi juga "report_title" (judul laporan) dan "highlight" (1-2 kalimat insight paling penting hari ini, terpisah dari caption)."""
 
     resp = client.with_options(max_retries=6).messages.create(
         model="claude-sonnet-5",
-        max_tokens=8000,
+        max_tokens=12000,
         thinking={"type": "disabled"},
         output_config={"format": {"type": "json_schema", "schema": REPORT_SCHEMA}},
         messages=[{"role": "user", "content": prompt}],
     )
 
+    print(f"  stop_reason={resp.stop_reason}, output_tokens={resp.usage.output_tokens}")
+
     text_blocks = [block.text for block in resp.content if block.type == "text"]
-    return json.loads("\n".join(text_blocks).strip())
+    raw_json = "\n".join(text_blocks).strip()
+
+    try:
+        return json.loads(raw_json)
+    except json.JSONDecodeError:
+        print(f"  Gagal parse JSON (panjang={len(raw_json)}). 500 karakter terakhir:", file=sys.stderr)
+        print(raw_json[-500:], file=sys.stderr)
+        raise
 
 
 # ---------------------------------------------------------------------------
