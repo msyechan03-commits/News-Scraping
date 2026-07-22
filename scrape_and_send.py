@@ -34,12 +34,26 @@ RSS_FEEDS = [
 HOURS_LOOKBACK = 20  # ambil berita dari X jam terakhir (jalan tiap pagi)
 
 
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+    )
+}
+
+
 def fetch_recent_entries():
     cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=HOURS_LOOKBACK)
     entries = []
 
     for url in RSS_FEEDS:
-        feed = feedparser.parse(url)
+        try:
+            resp = requests.get(url, headers=HEADERS, timeout=15)
+            feed = feedparser.parse(resp.content)
+        except requests.RequestException as exc:
+            print(f"Gagal ambil feed {url}: {exc}", file=sys.stderr)
+            continue
+
         for e in feed.entries:
             pub = None
             if getattr(e, "published_parsed", None):
