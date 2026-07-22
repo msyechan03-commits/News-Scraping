@@ -111,7 +111,8 @@ Tolong buatkan rangkuman berita ekonomi untuk pesan WhatsApp pagi hari, dengan f
         messages=[{"role": "user", "content": prompt}],
     )
 
-    return resp.content[0].text.strip()
+    text_blocks = [block.text for block in resp.content if block.type == "text"]
+    return "\n".join(text_blocks).strip()
 
 
 # ---------------------------------------------------------------------------
