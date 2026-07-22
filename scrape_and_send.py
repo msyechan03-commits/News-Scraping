@@ -254,20 +254,27 @@ def build_html(data: dict, date_str: str) -> str:
     dr_logo_b64 = _b64_image(DR_LOGO_PATH)
 
     sections_html = []
-    for section in data.get("sections", []):
+    for s_idx, section in enumerate(data.get("sections", []), start=1):
         items_html = []
         for item in section.get("items", []):
             source_url = html.escape(item.get("source_url", ""))
+            source_line = (
+                f'<a class="item-source" href="{source_url}">&#8599;&nbsp;Sumber</a>'
+                if source_url else ""
+            )
             items_html.append(f"""
             <div class="item">
                 <div class="item-title">{html.escape(item.get('title', ''))}</div>
                 <div class="item-body">{html.escape(item.get('body', ''))}</div>
-                {f'<a class="item-source" href="{source_url}">{source_url}</a>' if source_url else ''}
+                {source_line}
             </div>
             """)
         sections_html.append(f"""
         <div class="section">
-            <h2>{html.escape(section.get('heading', ''))}</h2>
+            <div class="section-head">
+                <span class="section-num">{s_idx:02d}</span>
+                <span class="section-title">{html.escape(section.get('heading', ''))}</span>
+            </div>
             {''.join(items_html)}
         </div>
         """)
@@ -279,131 +286,256 @@ def build_html(data: dict, date_str: str) -> str:
 <style>
     @page {{
         size: A4;
-        margin: 2.2cm 1.8cm 2cm 1.8cm;
-        @bottom-center {{
-            content: "Halaman " counter(page) " dari " counter(pages);
-            font-size: 8pt;
-            color: #6b7a90;
+        margin: 2.3cm 1.9cm 1.8cm 1.9cm;
+        @top-left {{
+            content: "DEPARTEMEN REGIONAL \\2014 BANK INDONESIA";
+            font-family: Arial, sans-serif;
+            font-size: 7.5pt;
+            letter-spacing: 0.08em;
+            color: #8a9bb5;
         }}
+        @top-right {{
+            content: "{html.escape(date_str).upper()}";
+            font-family: Arial, sans-serif;
+            font-size: 7.5pt;
+            letter-spacing: 0.05em;
+            color: #8a9bb5;
+        }}
+        @bottom-right {{
+            content: "Halaman " counter(page) " / " counter(pages);
+            font-family: Arial, sans-serif;
+            font-size: 7.5pt;
+            color: #8a9bb5;
+        }}
+        @bottom-left {{
+            content: "Laporan Internal";
+            font-family: Arial, sans-serif;
+            font-size: 7.5pt;
+            color: #b9863f;
+        }}
+    }}
+    /* Cover: full-bleed, tanpa margin & tanpa header/footer */
+    @page :first {{
+        margin: 0;
+        @top-left {{ content: ""; }}
+        @top-right {{ content: ""; }}
+        @bottom-right {{ content: ""; }}
+        @bottom-left {{ content: ""; }}
     }}
     * {{ box-sizing: border-box; }}
     body {{
         font-family: 'Helvetica Neue', Arial, sans-serif;
-        color: #1a2332;
+        color: #1b2536;
         font-size: 10.5pt;
-        line-height: 1.5;
+        line-height: 1.55;
+        margin: 0;
     }}
-    .header {{
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border-bottom: 3px solid #0b3d91;
-        padding-bottom: 14px;
-        margin-bottom: 6px;
-    }}
-    .header img {{ height: 34px; }}
-    .header .logos {{ display: flex; gap: 22px; align-items: center; }}
-    .masthead {{
-        background: #0b3d91;
+
+    /* ============ COVER (halaman 1) ============ */
+    .cover {{
+        position: relative;
+        width: 21cm;
+        height: 29.7cm;
+        background: #0a2342;
         color: #ffffff;
-        padding: 22px 26px;
-        border-radius: 6px;
-        margin-bottom: 22px;
+        page-break-after: always;
+        overflow: hidden;
     }}
-    .masthead .org {{
-        font-size: 9pt;
-        letter-spacing: 0.06em;
+    /* pita aksen emas vertikal di tepi kiri */
+    .cover-accent {{
+        position: absolute;
+        top: 0; left: 0; bottom: 0;
+        width: 0.5cm;
+        background: #c9a24b;
+    }}
+    /* panel navy lebih terang di bawah utk kedalaman */
+    .cover-band {{
+        position: absolute;
+        left: 0; right: 0; bottom: 0;
+        height: 9.5cm;
+        background: #0d2b52;
+    }}
+    .cover-inner {{
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        padding: 2cm 2cm 1.8cm 2.3cm;
+    }}
+    .logo-card {{
+        background: #ffffff;
+        border-radius: 10px;
+        padding: 20px 26px;
+        width: 100%;
+    }}
+    .logo-card td {{ vertical-align: middle; }}
+    .cover-eyebrow {{
+        position: absolute;
+        left: 2.3cm; right: 2cm;
+        top: 13.2cm;
+        font-size: 12pt;
+        letter-spacing: 0.14em;
         text-transform: uppercase;
-        color: #cfe0ff;
-        margin-bottom: 6px;
-    }}
-    .masthead h1 {{
-        font-size: 20pt;
-        margin: 0 0 8px 0;
+        color: #c9a24b;
         font-weight: 700;
     }}
-    .masthead .date {{
-        font-size: 10pt;
-        color: #dbe8ff;
+    .cover-title {{
+        position: absolute;
+        left: 2.3cm; right: 2cm;
+        top: 14.6cm;
+        font-size: 40pt;
+        line-height: 1.15;
+        font-weight: 800;
+        color: #ffffff;
     }}
+    .cover-rule {{
+        position: absolute;
+        left: 2.3cm;
+        top: 22cm;
+        width: 2.4cm;
+        height: 4px;
+        background: #c9a24b;
+    }}
+    .cover-tagline {{
+        position: absolute;
+        left: 2.3cm; right: 5cm;
+        top: 22.5cm;
+        font-size: 12.5pt;
+        color: #b7c8e4;
+        line-height: 1.6;
+    }}
+    .cover-foot {{
+        position: absolute;
+        left: 2.3cm; right: 2cm;
+        bottom: 1.8cm;
+    }}
+    .cover-foot .date {{
+        font-size: 15pt;
+        font-weight: 700;
+        color: #ffffff;
+    }}
+    .cover-foot .sub {{
+        font-size: 9.5pt;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: #8fa6cc;
+        margin-top: 4px;
+    }}
+
+    /* ============ KONTEN (halaman 2 dst) ============ */
+    .content {{ padding-top: 2px; }}
+
     .highlight-box {{
-        background: #eef3fc;
-        border-left: 4px solid #0b3d91;
-        padding: 12px 16px;
-        margin-bottom: 24px;
-        font-size: 10.5pt;
-        color: #12233f;
+        background: #0a2342;
+        color: #ffffff;
+        border-radius: 8px;
+        padding: 16px 20px 18px 20px;
+        margin-bottom: 26px;
     }}
     .highlight-box .label {{
-        font-weight: 700;
-        color: #0b3d91;
         display: block;
-        margin-bottom: 4px;
-        font-size: 9pt;
+        font-weight: 700;
+        color: #e0be6a;
+        margin-bottom: 6px;
+        font-size: 8.5pt;
         text-transform: uppercase;
-        letter-spacing: 0.04em;
+        letter-spacing: 0.12em;
     }}
-    .section {{ margin-bottom: 22px; }}
-    .section h2 {{
-        font-size: 12.5pt;
-        color: #0b3d91;
-        border-bottom: 1.5px solid #c6d6f0;
-        padding-bottom: 6px;
-        margin-bottom: 12px;
+    .highlight-box .text {{ font-size: 11pt; line-height: 1.55; color: #eef3fb; }}
+
+    .section {{ margin-bottom: 24px; }}
+    .section-head {{
+        margin-bottom: 14px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #0a2342;
+    }}
+    .section-num {{
+        display: inline-block;
+        background: #c9a24b;
+        color: #0a2342;
+        font-weight: 800;
+        font-size: 10pt;
+        padding: 2px 8px;
+        border-radius: 4px;
+        margin-right: 10px;
+        letter-spacing: 0.03em;
+    }}
+    .section-title {{
+        font-size: 13pt;
+        font-weight: 700;
+        color: #0a2342;
+        letter-spacing: 0.01em;
     }}
     .item {{
-        margin-bottom: 14px;
-        padding-left: 2px;
+        margin-bottom: 15px;
+        padding-left: 14px;
+        border-left: 3px solid #d9e2f0;
     }}
     .item-title {{
         font-weight: 700;
-        font-size: 10.5pt;
-        color: #12233f;
+        font-size: 11pt;
+        color: #142743;
         margin-bottom: 3px;
     }}
     .item-body {{
-        color: #33415c;
-        margin-bottom: 3px;
+        color: #3c4a63;
+        margin-bottom: 4px;
+        font-size: 10pt;
     }}
     .item-source {{
-        font-size: 8.5pt;
-        color: #5c7bb0;
-        word-break: break-all;
+        font-size: 8pt;
+        color: #b9863f;
+        font-weight: 700;
+        letter-spacing: 0.04em;
         text-decoration: none;
+        text-transform: uppercase;
     }}
     .footer-note {{
-        margin-top: 28px;
+        margin-top: 30px;
         padding-top: 12px;
-        border-top: 1px solid #dde5f0;
-        font-size: 8pt;
-        color: #8494ab;
+        border-top: 1px solid #e2e8f2;
+        font-size: 7.5pt;
+        color: #94a1b8;
+        line-height: 1.5;
     }}
 </style>
 </head>
 <body>
-    <div class="header">
-        <div class="logos">
-            <img src="data:image/png;base64,{bi_logo_b64}" alt="Bank Indonesia">
+    <div class="cover">
+        <div class="cover-accent"></div>
+        <div class="cover-band"></div>
+        <div class="cover-inner">
+            <table class="logo-card" cellspacing="0" cellpadding="0" style="width:100%;">
+                <tr>
+                    <td style="text-align:left;">
+                        <img src="data:image/png;base64,{bi_logo_b64}" alt="Bank Indonesia" style="width:230px;">
+                    </td>
+                    <td style="text-align:right;">
+                        <img src="data:image/png;base64,{dr_logo_b64}" alt="Departemen Regional" style="width:95px;">
+                    </td>
+                </tr>
+            </table>
         </div>
-        <img src="data:image/png;base64,{dr_logo_b64}" alt="Departemen Regional" style="height: 40px;">
+        <div class="cover-eyebrow">Departemen Regional</div>
+        <div class="cover-title">Rangkuman Berita<br>Ekonomi Harian</div>
+        <div class="cover-rule"></div>
+        <div class="cover-tagline">Rangkuman perkembangan ekonomi terkini, disusun otomatis dari agregasi berita publik.</div>
+        <div class="cover-foot">
+            <div class="date">{html.escape(date_str)}</div>
+            <div class="sub">Bank Indonesia &nbsp;&middot;&nbsp; Laporan Internal</div>
+        </div>
     </div>
 
-    <div class="masthead">
-        <div class="org">Departemen Regional &mdash; Bank Indonesia</div>
-        <h1>{html.escape(data.get('report_title', 'Rangkuman Berita Ekonomi Harian'))}</h1>
-        <div class="date">{html.escape(date_str)}</div>
-    </div>
+    <div class="content">
+        <div class="highlight-box">
+            <span class="label">Highlight Hari Ini</span>
+            <span class="text">{html.escape(data.get('highlight', ''))}</span>
+        </div>
 
-    <div class="highlight-box">
-        <span class="label">Highlight Hari Ini</span>
-        {html.escape(data.get('highlight', ''))}
-    </div>
+        {''.join(sections_html) if sections_html else '<p>Tidak ada berita ekonomi baru yang terdeteksi pagi ini.</p>'}
 
-    {''.join(sections_html) if sections_html else '<p>Tidak ada berita ekonomi baru yang terdeteksi pagi ini.</p>'}
-
-    <div class="footer-note">
-        Dihasilkan otomatis dari agregasi berita publik (Google News). Bukan rilis resmi Bank Indonesia / Departemen
-        Regional. Untuk keperluan internal.
+        <div class="footer-note">
+            Dihasilkan otomatis dari agregasi berita publik (Google News). Bukan rilis resmi Bank Indonesia / Departemen
+            Regional. Untuk keperluan internal.
+        </div>
     </div>
 </body>
 </html>"""
