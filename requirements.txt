@@ -1,4 +1,8 @@
 feedparser==6.0.11
 requests==2.32.3
 anthropic==0.117.1
-weasyprint==62.3
+# WeasyPrint + pydyf harus dipin bareng - versi pydyf terbaru menghapus/mengubah
+# Stream.transform sehingga WeasyPrint 62.x error 'super object has no attribute transform'.
+# Pasangan 60.2 + 0.8.0 ini kombinasi stabil yang teruji.
+weasyprint==60.2
+pydyf==0.8.0
