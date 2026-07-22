@@ -108,6 +108,7 @@ Tolong buatkan rangkuman berita ekonomi untuk pesan WhatsApp pagi hari, dengan f
     resp = client.messages.create(
         model="claude-sonnet-5",
         max_tokens=1500,
+        thinking={"type": "disabled"},
         messages=[{"role": "user", "content": prompt}],
     )
 
