@@ -183,7 +183,7 @@ Buatkan DUA versi rangkuman dari berita-berita di atas:
 
 Isi juga "report_title" (judul laporan) dan "highlight" (1-2 kalimat insight paling penting hari ini, terpisah dari caption)."""
 
-    resp = client.messages.create(
+    resp = client.with_options(max_retries=6).messages.create(
         model="claude-sonnet-5",
         max_tokens=4000,
         thinking={"type": "disabled"},
