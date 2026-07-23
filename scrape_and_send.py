@@ -229,11 +229,14 @@ def summarize_with_claude(entries: list) -> dict:
 
 {raw_text}
 
-PRIORITAS UTAMA: kalau ada berita tentang keputusan/pengumuman kebijakan moneter Bank
-Indonesia (BI Rate, suku bunga acuan, RDG BI), itu WAJIB jadi poin PERTAMA di "caption"
-dan item PERTAMA di "sections" - walau bukan berita yang paling banyak diberitakan media,
-karena ini yang paling relevan untuk pembaca laporan ini. Setelah itu baru berita penting
-lainnya, urutkan dari yang paling berdampak/signifikan.
+PRIORITAS: Pikirkan baik-baik mana berita ekonomi yang PALING PENTING dan paling berdampak
+luas untuk pembaca laporan ini (kalangan Bank Indonesia / pengambil kebijakan ekonomi
+regional). Urutkan dari yang paling signifikan ke yang kurang. Sebagai panduan penilaian:
+berita kebijakan moneter (BI Rate, suku bunga acuan, RDG BI), data makro utama (inflasi,
+pertumbuhan ekonomi, nilai tukar rupiah, neraca perdagangan, cadangan devisa), dan keputusan
+kebijakan fiskal/pemerintah biasanya LEBIH PENTING daripada berita korporasi tunggal, promosi
+produk, atau berita seremonial. Tapi gunakan penilaianmu sendiri berdasarkan dampak & relevansi
+berita hari itu - jangan asal ikut mana yang paling banyak diberitakan media.
 
 Buatkan DUA versi rangkuman dari berita-berita di atas:
 
@@ -254,10 +257,18 @@ Buatkan DUA versi rangkuman dari berita-berita di atas:
 
 Isi juga "report_title" (judul laporan) dan "highlight" (1-2 kalimat insight paling penting hari ini, terpisah dari caption)."""
 
+    # Sonnet 5 dgn thinking ringan (effort low): tugas ini adalah PENILAIAN
+    # (memilih & mengurutkan berita terpenting), bukan sekadar meringkas - Sonnet
+    # jauh lebih baik menimbang mana yg penting drpd Haiku. Effort low = reasoning
+    # secukupnya, biaya tetap kecil. max_tokens dinaikkan krn thinking ikut terhitung.
     resp = client.with_options(max_retries=6).messages.create(
-        model="claude-haiku-4-5",
-        max_tokens=8000,
-        output_config={"format": {"type": "json_schema", "schema": REPORT_SCHEMA}},
+        model="claude-sonnet-5",
+        max_tokens=12000,
+        thinking={"type": "adaptive"},
+        output_config={
+            "effort": "low",
+            "format": {"type": "json_schema", "schema": REPORT_SCHEMA},
+        },
         messages=[{"role": "user", "content": prompt}],
     )
 
