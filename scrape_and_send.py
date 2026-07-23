@@ -41,13 +41,14 @@ from weasyprint import HTML
 # 1. Sumber berita (RSS). Tambah/kurangi sesuai selera.
 # CNBC/CNN Indonesia diblokir (HTTP 403) dari IP GitHub Actions, jadi pakai
 # Google News RSS (aggregator lintas media, tidak memblokir IP cloud).
-# Feed ke-3 khusus kebijakan moneter/BI Rate supaya berita sepenting itu tidak
-# tenggelam di antara berita umum lain (Google News tidak selalu naikkan ke atas).
+# CATATAN: SENGAJA TIDAK ada feed khusus "BI Rate". Feed umum sudah pasti
+# mengangkat keputusan BI Rate sbg berita utama di hari-H; sebaliknya, feed
+# khusus BI Rate malah membanjiri kandidat dgn berita REAKSI/ulasan lanjutan
+# selama berhari-hari setelah keputusan, bikin BI Rate seolah muncul tiap hari.
 # ---------------------------------------------------------------------------
 RSS_FEEDS = [
     "https://news.google.com/rss/search?q=ekonomi+indonesia+when:1d&hl=id&gl=ID&ceid=ID:id",
     "https://news.google.com/rss/search?q=bisnis+OR+market+OR+bursa+indonesia+when:1d&hl=id&gl=ID&ceid=ID:id",
-    "https://news.google.com/rss/search?q=%22BI+Rate%22+OR+%22suku+bunga+acuan%22+OR+%22Bank+Indonesia%22+when:1d&hl=id&gl=ID&ceid=ID:id",
 ]
 
 HOURS_LOOKBACK = 20  # ambil berita dari X jam terakhir (jalan tiap pagi)
@@ -240,13 +241,17 @@ BI Rate/RDG BI), rilis data makro (inflasi, pertumbuhan, nilai tukar, neraca per
 cadangan devisa), dan kebijakan fiskal/pemerintah biasanya lebih penting daripada berita
 korporasi tunggal, promosi produk, atau seremonial.
 
-PENTING soal BI Rate / suku bunga: JANGAN paksakan berita BI Rate atau suku bunga ke urutan
-atas kalau hari ini TIDAK ADA keputusan atau pengumuman baru. RDG BI hanya sekali sebulan -
-di hari-hari biasa (tanpa keputusan baru), abaikan saja berita BI Rate lama/ulasan dan pilih
-berita lain yang benar-benar paling penting hari itu (misal data ekonomi baru, pergerakan
-rupiah signifikan, kebijakan pemerintah, isu global yang berdampak). Perlakukan berita
-kebijakan moneter sama seperti berita lain: masuk prioritas HANYA kalau memang ada hal baru
-yang penting hari itu.
+PENTING soal BI Rate / suku bunga - bedakan BERITA BARU vs BERITA REAKSI:
+- Hanya keputusan/pengumuman BI yang BENAR-BENAR BARU hari itu (mis. "BI naikkan/tahan suku
+  bunga jadi X%") yang boleh masuk prioritas atas.
+- Setelah keputusan, media terus menerbitkan berita REAKSI/ANALISIS LANJUTAN yang mengutip
+  BI Rate selama beberapa hari (mis. "analis menilai kenaikan BI Rate...", "dampak BI Rate ke
+  rupiah...", "BI Rate dan prospek kredit..."). INI BUKAN BERITA BARU - jangan angkat ke
+  prioritas hanya karena BI Rate masih sering disebut. Abaikan atau anggap konteks biasa.
+- RDG BI hanya sekali sebulan. Di mayoritas hari (tanpa keputusan baru), TIDAK apa-apa kalau
+  tidak ada satupun poin tentang BI Rate - justru itu yang benar. Isi dengan berita lain yang
+  benar-benar paling penting hari itu (data ekonomi baru, pergerakan rupiah signifikan,
+  kebijakan pemerintah, isu global berdampak, dll).
 
 Buatkan DUA versi rangkuman dari berita-berita di atas:
 
