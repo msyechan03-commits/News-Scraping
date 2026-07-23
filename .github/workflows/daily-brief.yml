@@ -2,8 +2,8 @@ name: Rangkuman Berita Ekonomi Harian
 
 on:
   schedule:
-    # 23:30 UTC = 06:30 WIB (Jakarta). Ubah sesuai jam yang Anda mau.
-    - cron: "30 23 * * *"
+    # 00:00 UTC = 07:00 WIB (Jakarta). Ubah sesuai jam yang Anda mau.
+    - cron: "0 0 * * *"
   workflow_dispatch: {}   # supaya bisa juga dijalankan manual dari tab "Actions" kalau perlu
 
 permissions:
