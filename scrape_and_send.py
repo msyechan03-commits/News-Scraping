@@ -230,13 +230,23 @@ def summarize_with_claude(entries: list) -> dict:
 {raw_text}
 
 PRIORITAS: Pikirkan baik-baik mana berita ekonomi yang PALING PENTING dan paling berdampak
-luas untuk pembaca laporan ini (kalangan Bank Indonesia / pengambil kebijakan ekonomi
-regional). Urutkan dari yang paling signifikan ke yang kurang. Sebagai panduan penilaian:
-berita kebijakan moneter (BI Rate, suku bunga acuan, RDG BI), data makro utama (inflasi,
-pertumbuhan ekonomi, nilai tukar rupiah, neraca perdagangan, cadangan devisa), dan keputusan
-kebijakan fiskal/pemerintah biasanya LEBIH PENTING daripada berita korporasi tunggal, promosi
-produk, atau berita seremonial. Tapi gunakan penilaianmu sendiri berdasarkan dampak & relevansi
-berita hari itu - jangan asal ikut mana yang paling banyak diberitakan media.
+luas HARI INI untuk pembaca laporan ini (kalangan Bank Indonesia / pengambil kebijakan
+ekonomi regional). Urutkan dari yang paling signifikan ke yang kurang, berdasarkan APA YANG
+BENAR-BENAR TERJADI atau DIUMUMKAN hari itu - bukan asal ikut mana yang paling banyak
+diberitakan media.
+
+Panduan bobot (bukan aturan wajib): keputusan/data BARU seperti kebijakan moneter (keputusan
+BI Rate/RDG BI), rilis data makro (inflasi, pertumbuhan, nilai tukar, neraca perdagangan,
+cadangan devisa), dan kebijakan fiskal/pemerintah biasanya lebih penting daripada berita
+korporasi tunggal, promosi produk, atau seremonial.
+
+PENTING soal BI Rate / suku bunga: JANGAN paksakan berita BI Rate atau suku bunga ke urutan
+atas kalau hari ini TIDAK ADA keputusan atau pengumuman baru. RDG BI hanya sekali sebulan -
+di hari-hari biasa (tanpa keputusan baru), abaikan saja berita BI Rate lama/ulasan dan pilih
+berita lain yang benar-benar paling penting hari itu (misal data ekonomi baru, pergerakan
+rupiah signifikan, kebijakan pemerintah, isu global yang berdampak). Perlakukan berita
+kebijakan moneter sama seperti berita lain: masuk prioritas HANYA kalau memang ada hal baru
+yang penting hari itu.
 
 Buatkan DUA versi rangkuman dari berita-berita di atas:
 
