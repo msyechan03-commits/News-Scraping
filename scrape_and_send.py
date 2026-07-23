@@ -70,7 +70,7 @@ RSS_FEEDS = [
     for terms in _REGION_QUERY_TERMS.values()
 ]
 
-HOURS_LOOKBACK = 20  # ambil berita dari X jam terakhir (jalan tiap pagi)
+HOURS_LOOKBACK = 24  # ambil berita dari X jam terakhir
 PER_FEED_LIMIT = 25  # maks entri diambil DARI TIAP feed (bukan total) - lihat catatan di fetch_recent_entries()
 
 HEADERS = {
@@ -152,12 +152,21 @@ def fetch_recent_entries():
             source_name = (source.get("title") or "").strip()
             source_href = (source.get("href") or "").strip()
 
+            # Tanggal terbit asli (WIB, format singkat "23 Jul") - dihitung di sini
+            # dari data RSS asli, BUKAN ditebak Claude nanti. Model tinggal salin
+            # field ini apa adanya, jadi tanggal per-berita selalu akurat.
+            date_label = ""
+            if pub is not None:
+                pub_wib = pub.astimezone(datetime.timezone(datetime.timedelta(hours=7)))
+                date_label = f"{pub_wib.day} {MONTHS_ID[pub_wib.month - 1][:3]}"
+
             entries.append({
                 "title": title,
                 "summary": e.get("summary", "").strip(),
                 "link": e.get("link", "").strip(),
                 "source_name": source_name,
                 "source_href": source_href,
+                "date_label": date_label,
             })
 
     return entries
@@ -175,11 +184,14 @@ def fetch_recent_entries():
 # Semua list boleh kosong - tidak dipaksakan ada isinya tiap hari.
 # ---------------------------------------------------------------------------
 _ITEM_PROPS = {
+    "date": {"type": "string", "description": "Tanggal terbit berita, disalin PERSIS dari field Tanggal pada data sumber (mis. '23 Jul') - jangan dihitung/ditebak sendiri, kosongkan kalau field Tanggal kosong."},
+    "province": {"type": "string", "description": "Provinsi spesifik yang disebut di berita (mis. 'Sumatera Barat', 'Jawa Barat'). Kosongkan kalau berita tidak menyebut provinsi spesifik (mis. cuma bicara wilayah/nasional secara umum) - jangan menebak/mengarang."},
     "title": {"type": "string"},
     "body": {"type": "string", "description": "1-3 kalimat. Kuantitatif (angka/persentase) kalau tersedia di berita, kualitatif/naratif kalau tidak - yang penting ada indikasi perkembangan/update."},
     "source_url": {"type": "string", "description": "Link asli, disalin persis dari field Link pada data sumber - jangan dikarang."},
     "source_name": {"type": "string", "description": "Nama media, disalin persis dari field Sumber pada data (mis. 'CNBC Indonesia') - jangan dikarang, kosongkan jika tidak ada."},
 }
+_ITEM_REQUIRED = ["date", "province", "title", "body", "source_url", "source_name"]
 
 REPORT_SCHEMA = {
     "type": "object",
@@ -205,7 +217,7 @@ REPORT_SCHEMA = {
                     "scope": {"type": "string", "enum": ["Global", "Nasional"]},
                     **_ITEM_PROPS,
                 },
-                "required": ["scope", "title", "body", "source_url", "source_name"],
+                "required": ["scope"] + _ITEM_REQUIRED,
                 "additionalProperties": False,
             },
         },
@@ -220,6 +232,16 @@ REPORT_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "region_name": {"type": "string", "enum": REGIONS},
+                    "direction_summary": {
+                        "type": "string",
+                        "description": (
+                            "Narasi 2-4 kalimat kesimpulan arah perkembangan ekonomi wilayah ini "
+                            "(mis. 'Positif dengan risiko operasional. Hilirisasi kakao dan investasi baru "
+                            "jadi pendorong, namun kerusakan irigasi jadi risiko terhadap produksi pertanian.'). "
+                            "Sintesiskan dari isi demand+sectors di wilayah ini - JANGAN isi kalau demand dan "
+                            "sectors wilayah ini kosong."
+                        ),
+                    },
                     "demand": {
                         "type": "array",
                         "description": "Sisi Permintaan. Kosongkan kalau tidak ada berita relevan utk wilayah ini.",
@@ -229,7 +251,7 @@ REPORT_SCHEMA = {
                                 "category": {"type": "string", "enum": ["Fiskal", "Konsumsi RT", "Investasi", "Ekspor"]},
                                 **_ITEM_PROPS,
                             },
-                            "required": ["category", "title", "body", "source_url", "source_name"],
+                            "required": ["category"] + _ITEM_REQUIRED,
                             "additionalProperties": False,
                         },
                     },
@@ -245,7 +267,7 @@ REPORT_SCHEMA = {
                                 },
                                 **_ITEM_PROPS,
                             },
-                            "required": ["category", "title", "body", "source_url", "source_name"],
+                            "required": ["category"] + _ITEM_REQUIRED,
                             "additionalProperties": False,
                         },
                     },
@@ -258,17 +280,36 @@ REPORT_SCHEMA = {
                                 "component": {"type": "string", "enum": ["Inflasi Inti", "Inflasi VF", "Inflasi AP"]},
                                 **_ITEM_PROPS,
                             },
-                            "required": ["component", "title", "body", "source_url", "source_name"],
+                            "required": ["component"] + _ITEM_REQUIRED,
                             "additionalProperties": False,
                         },
                     },
                 },
-                "required": ["region_name", "demand", "sectors", "inflation"],
+                "required": ["region_name", "direction_summary", "demand", "sectors", "inflation"],
+                "additionalProperties": False,
+            },
+        },
+        "leadership_highlights": {
+            "type": "array",
+            "description": (
+                "Section akhir 'Highlight untuk Pimpinan' - rangkuman LINTAS-TEMA yang merangkum "
+                "semua section di atas sekaligus (bukan per wilayah). Kelompokkan berdasarkan tema yang "
+                "benar-benar muncul hari ini (mis. 'Investasi', 'Fiskal dan Konstruksi', 'Konsumsi', "
+                "'Risiko') - tema bebas sesuai isi berita hari itu, tidak harus selalu 4 tema yang sama. "
+                "3-6 item. Kalau suatu tema tidak relevan hari ini, jangan dipaksakan."
+            ),
+            "items": {
+                "type": "object",
+                "properties": {
+                    "theme": {"type": "string", "description": "Nama tema, mis. 'Investasi', 'Risiko'."},
+                    "text": {"type": "string", "description": "1-3 kalimat rangkuman lintas-wilayah utk tema ini."},
+                },
+                "required": ["theme", "text"],
                 "additionalProperties": False,
             },
         },
     },
-    "required": ["caption", "report_title", "highlight", "global_national", "regions"],
+    "required": ["caption", "report_title", "highlight", "global_national", "regions", "leadership_highlights"],
     "additionalProperties": False,
 }
 
@@ -295,6 +336,7 @@ def _normalize_report(data: dict) -> dict:
         "highlight": data.get("highlight") or "",
         "global_national": data.get("global_national") if isinstance(data.get("global_national"), list) else [],
         "regions": data.get("regions") if isinstance(data.get("regions"), list) else [],
+        "leadership_highlights": data.get("leadership_highlights") if isinstance(data.get("leadership_highlights"), list) else [],
     }
 
 
@@ -306,6 +348,7 @@ def summarize_with_claude(entries: list) -> dict:
             "highlight": "Tidak ada berita ekonomi baru yang terdeteksi pagi ini.",
             "global_national": [],
             "regions": [],
+            "leadership_highlights": [],
         }
 
     # Batas 150 (naik dari sebelumnya) krn sekarang PER_FEED_LIMIT sudah menjamin
@@ -313,7 +356,8 @@ def summarize_with_claude(entries: list) -> dict:
     # cuma jaring pengaman biar prompt tidak membengkak liar, bukan lagi penyebab
     # utama berita wilayah/LU/inflasi hilang.
     raw_text = "\n\n".join(
-        f"Judul: {it['title']}\nSumber: {it['source_name'] or '(tidak diketahui)'}"
+        f"Judul: {it['title']}\nTanggal: {it['date_label'] or '(tidak diketahui)'}"
+        f"\nSumber: {it['source_name'] or '(tidak diketahui)'}"
         f"\nCuplikan: {it['summary']}\nLink: {it['link']}"
         for it in entries[:150]
     )
@@ -347,6 +391,18 @@ SECTION 2 & 3 - "regions": Perkembangan Ekonomi & Inflasi per Wilayah Kerja
   kalau ada lebih dari 2 berita relevan utk kategori yg sama, pilih 2 yang paling penting/baru,
   jangan sertakan semuanya.
 
+  Setiap item (di section 1, demand, sectors, maupun inflation) WAJIB punya:
+  - "date": salin PERSIS dari field "Tanggal" di data sumber berita itu - jangan hitung/tebak
+    sendiri. Kosongkan kalau field Tanggal-nya "(tidak diketahui)".
+  - "province": provinsi spesifik yang disebut berita (mis. "Sumatera Barat", "Jawa Timur").
+    Kosongkan kalau beritanya tidak menyebut provinsi spesifik - JANGAN menebak/mengarang
+    provinsi hanya karena tahu wilayahnya.
+
+  Setelah demand+sectors satu wilayah selesai diisi, tulis "direction_summary" - narasi 2-4
+  kalimat menyimpulkan ARAH PERKEMBANGAN wilayah itu hari ini (positif/mixed/ada risiko, dan
+  kenapa), mensintesis dari isi demand+sectors wilayah tsb. Kosongkan "direction_summary" kalau
+  demand DAN sectors wilayah itu sama-sama kosong (tidak ada yang bisa disimpulkan).
+
 ATURAN PENTING - JANGAN DIPAKSAKAN:
 - TIDAK WAJIB semua 5 wilayah terisi. Hanya masukkan wilayah yang benar-benar punya berita
   relevan hari ini (investasi baru, perkembangan sektor, data inflasi, dll). Kalau cuma 1-2
@@ -358,6 +414,13 @@ ATURAN PENTING - JANGAN DIPAKSAKAN:
   bukan basa-basi.
 - Berita yang cuma menyebut kota/kabupaten spesifik tetap dipetakan ke wilayah induknya
   (mis. Semarang/Surabaya -> Jawa, Makassar -> Sulampua, Denpasar -> Balinusra, dst).
+
+SECTION AKHIR - "leadership_highlights": Highlight untuk Pimpinan
+  Setelah semua di atas selesai, buat rangkuman LINTAS-TEMA (bukan per wilayah lagi) yang
+  merangkum keseluruhan laporan - 3-6 item, dikelompokkan per tema yang benar-benar muncul hari
+  itu (contoh tema: Investasi, Fiskal dan Konstruksi, Konsumsi, Risiko - tapi pilih tema sesuai
+  isi berita hari itu, tidak harus selalu sama). Tiap tema: 1-3 kalimat merangkum poin-poin
+  terkait dari SELURUH wilayah/section yang relevan dgn tema itu.
 
 PRIORITAS: Pikirkan baik-baik mana berita ekonomi yang PALING PENTING dan paling berdampak luas
 HARI INI untuk pembaca laporan ini (kalangan Bank Indonesia / pengambil kebijakan ekonomi
@@ -379,11 +442,14 @@ Buatkan output berikut:
 
 1. "global_national" - lihat Section 1 di atas. Maks 6 item total, 1-3 kalimat per item.
 
-2. "regions" - lihat Section 2 & 3 di atas. Utk tiap item: judul, 1-3 kalimat penjelasan,
-   "source_url" (link asli dari field Link) dan "source_name" (nama media dari field Sumber) -
-   salin persis, jangan dikarang.
+2. "regions" - lihat Section 2 & 3 di atas. Utk tiap item: "date", "province", judul,
+   1-3 kalimat penjelasan, "source_url" (link asli dari field Link) dan "source_name" (nama
+   media dari field Sumber) - salin persis, jangan dikarang. Plus "direction_summary" per
+   wilayah (lihat instruksi di atas).
 
-3. "caption" - versi singkat gaya pesan WhatsApp pagi hari, MERANGKUM LINTAS semua section
+3. "leadership_highlights" - lihat instruksi Section Akhir di atas.
+
+4. "caption" - versi singkat gaya pesan WhatsApp pagi hari, MERANGKUM LINTAS semua section
    di atas (global/nasional + wilayah yang ada beritanya):
    - JANGAN tulis baris tanggal/sapaan di awal (sistem akan menambahkannya otomatis) - langsung
      mulai dari poin berita pertama.
@@ -396,20 +462,23 @@ Isi juga "report_title" (judul laporan, mis. 'Rangkuman Ekonomi Harian') dan "hi
 (1-2 kalimat insight paling penting hari ini, terpisah dari caption)."""
 
     # Sonnet 5 dgn thinking ringan (effort low): tugas ini adalah PENILAIAN
-    # (memilih & mengurutkan berita terpenting, klasifikasi ke wilayah/kategori),
-    # bukan sekadar meringkas - Sonnet jauh lebih baik menimbang ini drpd Haiku.
-    # max_tokens dinaikkan krn struktur skrg jauh lebih besar (global/nasional +
-    # 5 wilayah x 3 sub-bagian) + thinking ikut terhitung dlm token output.
-    resp = client.with_options(max_retries=6).messages.create(
+    # (memilih & mengurutkan berita terpenting, klasifikasi ke wilayah/kategori,
+    # mensintesis narasi arah perkembangan & highlight lintas-tema) - bukan sekadar
+    # meringkas, Sonnet jauh lebih baik menimbang ini drpd Haiku.
+    # max_tokens dinaikkan lagi (date/province per item + direction_summary +
+    # leadership_highlights bikin output jauh lebih panjang) - pakai streaming
+    # krn di atas ~16rb token non-streaming berisiko timeout HTTP SDK.
+    with client.with_options(max_retries=6).messages.stream(
         model="claude-sonnet-5",
-        max_tokens=16000,
+        max_tokens=24000,
         thinking={"type": "adaptive"},
         output_config={
             "effort": "low",
             "format": {"type": "json_schema", "schema": REPORT_SCHEMA},
         },
         messages=[{"role": "user", "content": prompt}],
-    )
+    ) as stream:
+        resp = stream.get_final_message()
 
     print(f"  stop_reason={resp.stop_reason}, output_tokens={resp.usage.output_tokens}")
 
@@ -433,6 +502,7 @@ Isi juga "report_title" (judul laporan, mis. 'Rangkuman Ekonomi Harian') dan "hi
             "highlight": _extract_scalar(raw_json, "highlight"),
             "global_national": [],
             "regions": [],
+            "leadership_highlights": [],
         }
         return _normalize_report(salvaged)
 
@@ -470,9 +540,14 @@ def _render_item(item: dict, category_label: str = "") -> str:
     category_html = (
         f'<div class="item-category">{html.escape(category_label)}</div>' if category_label else ""
     )
+    date = html.escape((item.get("date") or "").strip())
+    province = html.escape((item.get("province") or "").strip())
+    meta_parts = [p for p in (date, province) if p]
+    meta_html = f'<div class="item-meta">{" &middot; ".join(meta_parts)}</div>' if meta_parts else ""
     return f"""
     <div class="item">
         {category_html}
+        {meta_html}
         <div class="item-title">{html.escape(item.get('title', ''))}</div>
         <div class="item-body">{html.escape(item.get('body', ''))}</div>
         {source_line}
@@ -526,10 +601,21 @@ def _build_section2_html(regions: list) -> str:
             continue
         block = _render_subgroup("Sisi Permintaan", demand, "category")
         block += _render_subgroup("Sisi Penawaran (Lapangan Usaha)", sectors, "category")
+        direction_summary = (region.get("direction_summary") or "").strip()
+        direction_html = (
+            f"""
+            <div class="direction-summary">
+                <span class="direction-label">Arah Perkembangan</span>
+                {html.escape(direction_summary)}
+            </div>
+            """
+            if direction_summary else ""
+        )
         region_blocks.append(f"""
         <div class="region-block">
             <div class="region-name">{html.escape(region.get('region_name', ''))}</div>
             {block}
+            {direction_html}
         </div>
         """)
     body = "".join(region_blocks) if region_blocks else _render_empty_state(
@@ -547,30 +633,59 @@ def _build_section2_html(regions: list) -> str:
 
 
 def _build_section3_html(regions: list) -> str:
+    # Beda dari section 1 & 2: di sini SEMUA 5 wilayah SELALU ditampilkan (bukan
+    # cuma yang ada datanya) - kalau tidak ada data inflasi utk suatu wilayah,
+    # tetap tulis jujur "belum ditemukan", bukan disembunyikan begitu saja.
+    by_name = {r.get("region_name"): r for r in regions}
     region_blocks = []
-    for region in regions:
-        inflation = region.get("inflation", [])
-        if not inflation:
-            continue
-        # tanpa label sub-grup "Inflasi" - judul section sudah "Inflasi Wilayah",
-        # badge per item (mis. "Inflasi VF") sudah cukup, jadi tidak perlu diulang.
-        block = "".join(_render_item(it, it.get("component", "")) for it in inflation)
+    for region_name in REGIONS:
+        region = by_name.get(region_name)
+        inflation = region.get("inflation", []) if region else []
+        if inflation:
+            # tanpa label sub-grup "Inflasi" - judul section sudah "Inflasi Wilayah",
+            # badge per item (mis. "Inflasi VF") sudah cukup.
+            block = "".join(_render_item(it, it.get("component", "")) for it in inflation)
+        else:
+            block = _render_empty_state(
+                "Belum ditemukan berita/data yang memuat angka atau perkembangan inflasi "
+                "spesifik untuk wilayah ini dalam periode laporan."
+            )
         region_blocks.append(f"""
         <div class="region-block">
-            <div class="region-name">{html.escape(region.get('region_name', ''))}</div>
+            <div class="region-name">{html.escape(region_name)}</div>
             {block}
         </div>
         """)
-    body = "".join(region_blocks) if region_blocks else _render_empty_state(
-        "Tidak ada data/berita inflasi wilayah yang tercatat hari ini."
-    )
     return f"""
     <div class="section">
         <div class="section-head">
             <span class="section-num">03</span>
             <span class="section-title">Perkembangan Terkini Inflasi Wilayah</span>
         </div>
-        {body}
+        {''.join(region_blocks)}
+    </div>
+    """
+
+
+def _build_section4_html(leadership_highlights: list) -> str:
+    if not leadership_highlights:
+        return ""
+    items_html = "".join(
+        f"""
+        <div class="leadership-item">
+            <div class="leadership-theme">{html.escape(h.get('theme', ''))}</div>
+            <div class="leadership-text">{html.escape(h.get('text', ''))}</div>
+        </div>
+        """
+        for h in leadership_highlights
+    )
+    return f"""
+    <div class="section">
+        <div class="section-head">
+            <span class="section-num">04</span>
+            <span class="section-title">Highlight untuk Pimpinan</span>
+        </div>
+        {items_html}
     </div>
     """
 
@@ -584,6 +699,7 @@ def build_html(data: dict, date_str: str) -> str:
         _build_section1_html(data.get("global_national", []))
         + _build_section2_html(regions)
         + _build_section3_html(regions)
+        + _build_section4_html(data.get("leadership_highlights", []))
     )
 
     return f"""<!DOCTYPE html>
@@ -820,6 +936,11 @@ def build_html(data: dict, date_str: str) -> str:
         letter-spacing: 0.04em;
         margin-bottom: 5px;
     }}
+    .item-meta {{
+        font-size: 8pt;
+        color: #94a1b8;
+        margin-bottom: 3px;
+    }}
     .item-title {{
         font-weight: 700;
         font-size: 11pt;
@@ -840,6 +961,45 @@ def build_html(data: dict, date_str: str) -> str:
         letter-spacing: 0.04em;
         text-decoration: none;
         text-transform: uppercase;
+    }}
+    /* Narasi "Arah Perkembangan" di akhir tiap region-block (section 2) */
+    .direction-summary {{
+        margin-top: 6px;
+        padding: 10px 12px;
+        background: #eef3fc;
+        border-left: 3px solid #c9a24b;
+        border-radius: 4px;
+        font-size: 9.5pt;
+        color: #33415c;
+        text-align: justify;
+    }}
+    .direction-label {{
+        display: block;
+        font-weight: 800;
+        font-size: 7.5pt;
+        color: #0a2342;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 4px;
+    }}
+    /* Section 4: Highlight untuk Pimpinan */
+    .leadership-item {{
+        margin-bottom: 14px;
+        padding: 12px 16px;
+        background: #f7f9fc;
+        border-radius: 6px;
+        border: 1px solid #e6ebf3;
+    }}
+    .leadership-theme {{
+        font-weight: 800;
+        font-size: 10pt;
+        color: #0a2342;
+        margin-bottom: 4px;
+    }}
+    .leadership-text {{
+        font-size: 10pt;
+        color: #3c4a63;
+        text-align: justify;
     }}
     .footer-note {{
         margin-top: 30px;
