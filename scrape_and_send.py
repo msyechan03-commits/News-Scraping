@@ -71,6 +71,7 @@ RSS_FEEDS = [
 ]
 
 HOURS_LOOKBACK = 20  # ambil berita dari X jam terakhir (jalan tiap pagi)
+PER_FEED_LIMIT = 25  # maks entri diambil DARI TIAP feed (bukan total) - lihat catatan di fetch_recent_entries()
 
 HEADERS = {
     "User-Agent": (
@@ -123,7 +124,14 @@ def fetch_recent_entries():
             + (f", bozo_exception={feed.bozo_exception}" if feed.bozo else "")
         )
 
-        for e in feed.entries:
+        # PENTING: batasi jumlah entri PER FEED di sini (bukan total gabungan nanti).
+        # Ada 7 feed sekarang (2 umum + 5 wilayah); feed umum saja bisa balikin ~100
+        # entri. Kalau baru dipotong belakangan (mis. entries[:60] dari daftar
+        # gabungan), feed umum yang diambil duluan akan menghabiskan jatah itu
+        # duluan dan hampir semua berita wilayah/LU/inflasi dari 5 feed wilayah
+        # kepotong sebelum sempat sampai ke Claude. Batasi per-feed di sini supaya
+        # tiap feed - termasuk yang wilayah - selalu kebagian jatah adil.
+        for e in feed.entries[:PER_FEED_LIMIT]:
             pub = None
             if getattr(e, "published_parsed", None):
                 pub = datetime.datetime(*e.published_parsed[:6], tzinfo=datetime.timezone.utc)
@@ -300,10 +308,14 @@ def summarize_with_claude(entries: list) -> dict:
             "regions": [],
         }
 
+    # Batas 150 (naik dari sebelumnya) krn sekarang PER_FEED_LIMIT sudah menjamin
+    # tiap feed (termasuk 5 feed wilayah) kebagian jatah adil - jadi limit di sini
+    # cuma jaring pengaman biar prompt tidak membengkak liar, bukan lagi penyebab
+    # utama berita wilayah/LU/inflasi hilang.
     raw_text = "\n\n".join(
         f"Judul: {it['title']}\nSumber: {it['source_name'] or '(tidak diketahui)'}"
         f"\nCuplikan: {it['summary']}\nLink: {it['link']}"
-        for it in entries[:60]  # batasi biar tidak kepanjangan (lebih banyak drpd sebelumnya krn skrg cakupan lebih luas: global/nasional + 5 wilayah)
+        for it in entries[:150]
     )
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
@@ -331,6 +343,9 @@ SECTION 2 & 3 - "regions": Perkembangan Ekonomi & Inflasi per Wilayah Kerja
     Industri Pengolahan, Akmamin (Akomodasi & Makan Minum).
   - "inflation" (Inflasi Wilayah): Inflasi Inti, Inflasi VF (Volatile Food), Inflasi AP
     (Administered Prices).
+  Maks 2 item PER KATEGORI per wilayah (mis. maks 2 item utk "Investasi" di wilayah Jawa) -
+  kalau ada lebih dari 2 berita relevan utk kategori yg sama, pilih 2 yang paling penting/baru,
+  jangan sertakan semuanya.
 
 ATURAN PENTING - JANGAN DIPAKSAKAN:
 - TIDAK WAJIB semua 5 wilayah terisi. Hanya masukkan wilayah yang benar-benar punya berita
