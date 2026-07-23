@@ -36,7 +36,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add output/digest.pdf
+          git add "output/"*.pdf
           git commit -m "chore: update rangkuman harian $(date -u +'%Y-%m-%d')" || echo "Tidak ada perubahan untuk di-commit"
           git push
 

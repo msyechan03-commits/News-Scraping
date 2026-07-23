@@ -30,6 +30,7 @@ import os
 import re
 import sys
 import time
+import urllib.parse
 
 import anthropic
 import feedparser
@@ -40,10 +41,13 @@ from weasyprint import HTML
 # 1. Sumber berita (RSS). Tambah/kurangi sesuai selera.
 # CNBC/CNN Indonesia diblokir (HTTP 403) dari IP GitHub Actions, jadi pakai
 # Google News RSS (aggregator lintas media, tidak memblokir IP cloud).
+# Feed ke-3 khusus kebijakan moneter/BI Rate supaya berita sepenting itu tidak
+# tenggelam di antara berita umum lain (Google News tidak selalu naikkan ke atas).
 # ---------------------------------------------------------------------------
 RSS_FEEDS = [
     "https://news.google.com/rss/search?q=ekonomi+indonesia+when:1d&hl=id&gl=ID&ceid=ID:id",
     "https://news.google.com/rss/search?q=bisnis+OR+market+OR+bursa+indonesia+when:1d&hl=id&gl=ID&ceid=ID:id",
+    "https://news.google.com/rss/search?q=%22BI+Rate%22+OR+%22suku+bunga+acuan%22+OR+%22Bank+Indonesia%22+when:1d&hl=id&gl=ID&ceid=ID:id",
 ]
 
 HOURS_LOOKBACK = 20  # ambil berita dari X jam terakhir (jalan tiap pagi)
@@ -57,17 +61,33 @@ HEADERS = {
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
-PDF_PATH = os.path.join(OUTPUT_DIR, "digest.pdf")
 CAPTION_PATH = os.path.join(OUTPUT_DIR, "caption.txt")
-PDF_REPO_PATH = "output/digest.pdf"  # path relatif di repo, untuk URL raw GitHub
+PDF_FILENAME_STATE_PATH = os.path.join(OUTPUT_DIR, "pdf_filename.txt")
 
 BI_LOGO_PATH = os.path.join(BASE_DIR, "assets", "bi_logo.png")
 DR_LOGO_PATH = os.path.join(BASE_DIR, "assets", "dr_logo.png")
+
+DAYS_ID = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]
+MONTHS_ID = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+]
+
+
+def format_date_id(dt: datetime.datetime) -> str:
+    """Format tanggal Indonesia manual (tidak bergantung locale sistem, yang
+    seringkali tidak tersedia di runner GitHub Actions / berbeda OS)."""
+    return f"{DAYS_ID[dt.weekday()]}, {dt.day} {MONTHS_ID[dt.month - 1]} {dt.year}"
+
+
+def today_wib() -> datetime.datetime:
+    return datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=7)))
 
 
 def fetch_recent_entries():
     cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=HOURS_LOOKBACK)
     entries = []
+    seen_titles = set()
 
     for url in RSS_FEEDS:
         try:
@@ -92,10 +112,24 @@ def fetch_recent_entries():
             if pub is not None and pub < cutoff:
                 continue
 
+            title = e.get("title", "").strip()
+            if not title or title in seen_titles:
+                continue
+            seen_titles.add(title)
+
+            # Google News RSS punya tag <source url="...">Nama Media</source> -
+            # ini nama media aslinya (CNBC Indonesia, Bloomberg, dst), beda dari
+            # e['link'] yang cuma link redirect Google News.
+            source = e.get("source", {}) or {}
+            source_name = (source.get("title") or "").strip()
+            source_href = (source.get("href") or "").strip()
+
             entries.append({
-                "title": e.get("title", "").strip(),
+                "title": title,
                 "summary": e.get("summary", "").strip(),
                 "link": e.get("link", "").strip(),
+                "source_name": source_name,
+                "source_href": source_href,
             })
 
     return entries
@@ -132,9 +166,10 @@ REPORT_SCHEMA = {
                             "properties": {
                                 "title": {"type": "string"},
                                 "body": {"type": "string", "description": "2-4 kalimat penjelasan, lebih detail dari caption WhatsApp."},
-                                "source_url": {"type": "string"},
+                                "source_url": {"type": "string", "description": "Link asli, disalin persis dari field Link pada data sumber - jangan dikarang."},
+                                "source_name": {"type": "string", "description": "Nama media, disalin persis dari field Sumber pada data (mis. 'CNBC Indonesia', 'Bloomberg Technoz') - jangan dikarang, kosongkan jika tidak ada."},
                             },
-                            "required": ["title", "body", "source_url"],
+                            "required": ["title", "body", "source_url", "source_name"],
                             "additionalProperties": False,
                         },
                     },
@@ -183,8 +218,9 @@ def summarize_with_claude(entries: list) -> dict:
         }
 
     raw_text = "\n\n".join(
-        f"Judul: {it['title']}\nCuplikan: {it['summary']}\nLink: {it['link']}"
-        for it in entries[:30]  # batasi biar tidak kepanjangan
+        f"Judul: {it['title']}\nSumber: {it['source_name'] or '(tidak diketahui)'}"
+        f"\nCuplikan: {it['summary']}\nLink: {it['link']}"
+        for it in entries[:35]  # batasi biar tidak kepanjangan
     )
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
@@ -193,10 +229,17 @@ def summarize_with_claude(entries: list) -> dict:
 
 {raw_text}
 
+PRIORITAS UTAMA: kalau ada berita tentang keputusan/pengumuman kebijakan moneter Bank
+Indonesia (BI Rate, suku bunga acuan, RDG BI), itu WAJIB jadi poin PERTAMA di "caption"
+dan item PERTAMA di "sections" - walau bukan berita yang paling banyak diberitakan media,
+karena ini yang paling relevan untuk pembaca laporan ini. Setelah itu baru berita penting
+lainnya, urutkan dari yang paling berdampak/signifikan.
+
 Buatkan DUA versi rangkuman dari berita-berita di atas:
 
 1. "caption" - versi singkat gaya pesan WhatsApp pagi hari:
-   - Buka dengan satu baris tanggal & sapaan singkat.
+   - JANGAN tulis baris tanggal/sapaan di awal (sistem akan menambahkannya otomatis) -
+     langsung mulai dari poin berita pertama.
    - 5-8 poin berita terpenting (gabungkan berita duplikat/topik sama jadi satu poin).
    - Tiap poin: judul singkat (bold pakai *asterisk*, gaya WhatsApp) + 1-2 kalimat inti.
    - Tutup dengan 1 baris highlight paling penting hari ini.
@@ -204,7 +247,9 @@ Buatkan DUA versi rangkuman dari berita-berita di atas:
 
 2. "sections" - versi lebih panjang & detail untuk laporan PDF:
    - Kelompokkan berita jadi maksimal 4 kategori (misal: Makroekonomi & Kebijakan, Pasar & Bursa, Sektor & Korporasi, Global).
-   - Tiap item: judul, MAKSIMAL 2 kalimat penjelasan (lebih detail dari caption tapi tetap ringkas), dan link sumber asli beritanya (ambil dari field Link di atas, jangan dikarang).
+   - Tiap item: judul, MAKSIMAL 2 kalimat penjelasan (lebih detail dari caption tapi tetap ringkas),
+     "source_url" (link asli dari field Link) dan "source_name" (nama media dari field Sumber) -
+     salin persis, jangan dikarang.
    - Total SELURUH kategori maksimal 12 item (bukan per kategori) - pilih yang paling penting saja, jangan kepanjangan.
 
 Isi juga "report_title" (judul laporan) dan "highlight" (1-2 kalimat insight paling penting hari ini, terpisah dari caption)."""
@@ -249,6 +294,19 @@ def _b64_image(path: str) -> str:
         return base64.b64encode(f.read()).decode("ascii")
 
 
+def _source_label(item: dict) -> str:
+    """Nama media yang ditampilkan sbg teks link (mis. 'CNBC Indonesia'),
+    fallback ke nama domain (mis. 'cnbcindonesia.com') kalau source_name kosong."""
+    name = (item.get("source_name") or "").strip()
+    if name:
+        return name
+    url = (item.get("source_url") or "").strip()
+    if not url:
+        return ""
+    domain = urllib.parse.urlparse(url).netloc
+    return domain[4:] if domain.startswith("www.") else domain
+
+
 def build_html(data: dict, date_str: str) -> str:
     bi_logo_b64 = _b64_image(BI_LOGO_PATH)
     dr_logo_b64 = _b64_image(DR_LOGO_PATH)
@@ -258,9 +316,10 @@ def build_html(data: dict, date_str: str) -> str:
         items_html = []
         for item in section.get("items", []):
             source_url = html.escape(item.get("source_url", ""))
+            source_label = html.escape(_source_label(item))
             source_line = (
-                f'<a class="item-source" href="{source_url}">&#8599;&nbsp;Sumber</a>'
-                if source_url else ""
+                f'<a class="item-source" href="{source_url}">&#8599;&nbsp;{source_label}</a>'
+                if source_url and source_label else ""
             )
             items_html.append(f"""
             <div class="item">
@@ -439,7 +498,7 @@ def build_html(data: dict, date_str: str) -> str:
         text-transform: uppercase;
         letter-spacing: 0.12em;
     }}
-    .highlight-box .text {{ font-size: 11pt; line-height: 1.55; color: #eef3fb; }}
+    .highlight-box .text {{ font-size: 11pt; line-height: 1.55; color: #eef3fb; text-align: justify; }}
 
     .section {{ margin-bottom: 24px; }}
     .section-head {{
@@ -479,6 +538,8 @@ def build_html(data: dict, date_str: str) -> str:
         color: #3c4a63;
         margin-bottom: 4px;
         font-size: 10pt;
+        text-align: justify;
+        text-justify: inter-word;
     }}
     .item-source {{
         font-size: 8pt;
@@ -541,31 +602,33 @@ def build_html(data: dict, date_str: str) -> str:
 </html>"""
 
 
-def build_pdf(data: dict, date_str: str):
+def build_pdf(data: dict, date_str: str, pdf_path: str):
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     html_str = build_html(data, date_str)
-    HTML(string=html_str, base_url=BASE_DIR).write_pdf(PDF_PATH)
-    print(f"PDF dibuat: {PDF_PATH}")
+    HTML(string=html_str, base_url=BASE_DIR).write_pdf(pdf_path)
+    print(f"PDF dibuat: {pdf_path}")
 
 
 # ---------------------------------------------------------------------------
 # 4. Kirim ke WhatsApp lewat Twilio (dokumen PDF + caption)
 # ---------------------------------------------------------------------------
-def get_pdf_public_url() -> str:
+def get_pdf_public_url(pdf_filename: str) -> str:
     repo = os.environ.get("GITHUB_REPOSITORY")
     if not repo:
         raise RuntimeError("GITHUB_REPOSITORY tidak ada di environment - jalankan dari GitHub Actions.")
     branch = os.environ.get("GITHUB_REF_NAME", "main")
-    return f"https://raw.githubusercontent.com/{repo}/{branch}/{PDF_REPO_PATH}"
+    # encode nama file (ada spasi, kurung siku, koma) supaya jadi URL valid
+    encoded_filename = urllib.parse.quote(pdf_filename)
+    return f"https://raw.githubusercontent.com/{repo}/{branch}/output/{encoded_filename}"
 
 
-def send_whatsapp_pdf(caption: str):
+def send_whatsapp_pdf(caption: str, pdf_filename: str):
     account_sid = os.environ["TWILIO_ACCOUNT_SID"]
     auth_token = os.environ["TWILIO_AUTH_TOKEN"]
     from_number = os.environ["TWILIO_WHATSAPP_FROM"]
     to_number = os.environ["TWILIO_WHATSAPP_TO"]
 
-    media_url = get_pdf_public_url()
+    media_url = get_pdf_public_url(pdf_filename)
     print(f"URL PDF publik: {media_url}")
 
     # raw.githubusercontent.com kadang butuh beberapa detik ter-update setelah push
@@ -615,28 +678,37 @@ def cmd_generate():
 
     print("Merangkum dengan Claude...")
     data = summarize_with_claude(entries)
-    caption = data.get("caption", "")
+
+    date_str = format_date_id(today_wib())  # mis. "Rabu, 22 Juli 2026" - dihitung
+    # sendiri di kode (bukan ditebak Claude), supaya selalu benar & konsisten.
+
+    caption_body = (data.get("caption") or "").strip()
+    caption = f"📅 *{date_str}* — Selamat pagi!\n\n{caption_body}"
     print("--- CAPTION ---")
     print(caption)
 
-    date_str = datetime.datetime.now(
-        datetime.timezone(datetime.timedelta(hours=7))
-    ).strftime("%A, %d %B %Y")
+    pdf_filename = f"Ringkasan Ekonomi [{date_str}].pdf"
+    pdf_path = os.path.join(OUTPUT_DIR, pdf_filename)
 
     print("Membangun PDF...")
-    build_pdf(data, date_str)
+    build_pdf(data, date_str, pdf_path)
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     with open(CAPTION_PATH, "w", encoding="utf-8") as f:
         f.write(caption)
+    with open(PDF_FILENAME_STATE_PATH, "w", encoding="utf-8") as f:
+        f.write(pdf_filename)
     print(f"Caption disimpan: {CAPTION_PATH}")
+    print(f"Nama file PDF disimpan: {PDF_FILENAME_STATE_PATH} -> {pdf_filename}")
 
 
 def cmd_send():
     with open(CAPTION_PATH, "r", encoding="utf-8") as f:
         caption = f.read()
+    with open(PDF_FILENAME_STATE_PATH, "r", encoding="utf-8") as f:
+        pdf_filename = f.read().strip()
     print("Mengirim PDF ke WhatsApp...")
-    send_whatsapp_pdf(caption)
+    send_whatsapp_pdf(caption, pdf_filename)
     print("Selesai.")
 
 

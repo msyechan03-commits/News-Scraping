@@ -1,7 +1,9 @@
 __pycache__/
 *.pyc
 .DS_Store
-# CATATAN: output/digest.pdf SENGAJA di-track (di-commit) supaya punya URL publik
-# untuk dikirim via Twilio. Jangan tambahkan output/*.pdf ke sini.
+# CATATAN: output/*.pdf (mis. "Ringkasan Ekonomi [Rabu, 22 Juli 2026].pdf")
+# SENGAJA di-track (di-commit) supaya punya URL publik untuk dikirim via Twilio.
+# Jangan tambahkan output/*.pdf ke sini.
 output/caption.txt
+output/pdf_filename.txt
 output/*.png
