@@ -270,10 +270,10 @@ _ITEM_PROPS = {
     "province": {"type": "string", "description": "Provinsi spesifik yang disebut di berita (mis. 'Sumatera Barat', 'Jawa Barat'). Kosongkan kalau berita tidak menyebut provinsi spesifik (mis. cuma bicara wilayah/nasional secara umum) - jangan menebak/mengarang."},
     "title": {"type": "string"},
     "body": {"type": "string", "description": "1-3 kalimat. Kuantitatif (angka/persentase) kalau tersedia di berita, kualitatif/naratif kalau tidak - yang penting ada indikasi perkembangan/update."},
-    "source_url": {"type": "string", "description": "Link asli, disalin persis dari field Link pada data sumber - jangan dikarang."},
+    "source_id": {"type": "integer", "description": "Salin PERSIS angka ID dari data sumber berita ini (field 'ID' pada data - bukan menghitung/menebak sendiri). Dipakai sistem utk mengambil link asli - JANGAN menulis ulang link itu sendiri."},
     "source_name": {"type": "string", "description": "Nama media, disalin persis dari field Sumber pada data (mis. 'CNBC Indonesia') - jangan dikarang, kosongkan jika tidak ada."},
 }
-_ITEM_REQUIRED = ["date", "province", "title", "body", "source_url", "source_name"]
+_ITEM_REQUIRED = ["date", "province", "title", "body", "source_id", "source_name"]
 
 REPORT_SCHEMA = {
     "type": "object",
@@ -497,6 +497,27 @@ def _normalize_report(data: dict) -> dict:
     }
 
 
+def _resolve_source_ids(data: dict, entries: list) -> None:
+    """Ganti "source_id" (angka pendek yg ditulis Claude) jadi "source_url" (link
+    asli, diambil dari 'entries' by index) - dilakukan di Python, BUKAN oleh Claude,
+    supaya model tidak perlu "mengetik ulang" link Google News yang panjang
+    (~500+ karakter) di output - itu mahal krn token output dibilling ~5x token
+    input. In-place: memodifikasi tiap item dict langsung."""
+    def resolve_item(item: dict) -> None:
+        source_id = item.pop("source_id", None)
+        url = ""
+        if isinstance(source_id, int) and 0 <= source_id < len(entries):
+            url = entries[source_id].get("link", "")
+        item["source_url"] = url
+
+    for item in data.get("global_national", []):
+        resolve_item(item)
+    for region in data.get("regions", []):
+        for key in ("demand", "sectors", "inflation"):
+            for item in region.get(key, []):
+                resolve_item(item)
+
+
 def summarize_with_claude(entries: list) -> dict:
     if not entries:
         return {
@@ -512,11 +533,21 @@ def summarize_with_claude(entries: list) -> dict:
     # tiap feed (termasuk 5 feed wilayah) kebagian jatah adil - jadi limit di sini
     # cuma jaring pengaman biar prompt tidak membengkak liar, bukan lagi penyebab
     # utama berita wilayah/LU/inflasi hilang.
+    #
+    # CATATAN HEMAT TOKEN (penting):
+    # - Field "summary" mentah dari Google News RSS SELALU cuma HTML kosong berisi
+    #   judul yang dibungkus <a href=link>...</a> + nama sumber - tidak ada info
+    #   tambahan sama sekali di luar Judul/Sumber/Link yang sudah dikirim terpisah.
+    #   SENGAJA tidak diikutkan ke prompt (dulu boros ratusan token/entri tanpa nilai).
+    # - Link Google News asli ~500+ karakter (encoded, mahal utk di-generate ulang
+    #   di OUTPUT - 5x lebih mahal dari input). Ganti dengan ID pendek (index list
+    #   ini) - Claude cukup salin angkanya, link asli dipetakan balik di Python
+    #   sesudahnya (lihat _resolve_source_ids).
+    entries = entries[:150]
     raw_text = "\n\n".join(
-        f"Judul: {it['title']}\nTanggal: {it['date_label'] or '(tidak diketahui)'}"
+        f"ID: {idx}\nJudul: {it['title']}\nTanggal: {it['date_label'] or '(tidak diketahui)'}"
         f"\nSumber: {it['source_name'] or '(tidak diketahui)'}"
-        f"\nCuplikan: {it['summary']}\nLink: {it['link']}"
-        for it in entries[:150]
+        for idx, it in enumerate(entries)
     )
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
@@ -629,10 +660,11 @@ Buatkan output berikut:
 2. "global_summary" dan "national_summary" - lihat instruksi di atas (netral, tanpa tone).
 
 3. "regions" - lihat Section 2 & 3 di atas. Utk tiap item: "date", "province", judul,
-   1-3 kalimat penjelasan (yang menyebut nama kategorinya secara eksplisit), "source_url"
-   (link asli dari field Link) dan "source_name" (nama media dari field Sumber) - salin
-   persis, jangan dikarang. Plus "region_summary" per wilayah (lihat instruksi di atas -
-   netral, tanpa tone, sebutkan kategori tiap item yang disinggung).
+   1-3 kalimat penjelasan (yang menyebut nama kategorinya secara eksplisit), "source_id"
+   (salin PERSIS angka ID dari data sumber - jangan menghitung/menebak sendiri) dan
+   "source_name" (nama media dari field Sumber) - salin persis, jangan dikarang. Plus
+   "region_summary" per wilayah (lihat instruksi di atas - netral, tanpa tone, sebutkan
+   kategori tiap item yang disinggung).
 
 4. "caption" - versi singkat gaya pesan WhatsApp pagi hari, MERANGKUM LINTAS semua section
    di atas (global/nasional + wilayah yang ada beritanya):
@@ -664,13 +696,18 @@ Isi juga "report_title" (judul laporan, mis. 'Rangkuman Ekonomi Harian')."""
     ) as stream:
         resp = stream.get_final_message()
 
-    print(f"  stop_reason={resp.stop_reason}, output_tokens={resp.usage.output_tokens}")
+    print(
+        f"  stop_reason={resp.stop_reason}, input_tokens={resp.usage.input_tokens}, "
+        f"output_tokens={resp.usage.output_tokens}"
+    )
 
     text_blocks = [block.text for block in resp.content if block.type == "text"]
     raw_json = "\n".join(text_blocks).strip()
 
     try:
-        return _normalize_report(json.loads(raw_json))
+        data = _normalize_report(json.loads(raw_json))
+        _resolve_source_ids(data, entries)
+        return data
     except json.JSONDecodeError:
         # JSON kepotong (mis. kena max_tokens). Jangan crash & buang seluruh run -
         # selamatkan minimal caption (field pertama, biasanya utuh) via regex, kirim
@@ -755,20 +792,6 @@ def _render_subgroup(label: str, items: list, category_key: str) -> str:
 
 def _render_empty_state(text: str) -> str:
     return f'<p class="empty-state">{html.escape(text)}</p>'
-
-
-def _two_col_table(cells: list, table_class: str, cell_class: str) -> str:
-    """Susun list HTML block jadi tabel 2 kolom (bukan flexbox) - WeasyPrint 60.2
-    kurang stabil dgn flex-wrap+gap, jadi tabel klasik dipakai di beberapa tempat
-    (ringkasan eksekutif, highlight pimpinan, kamus keyword) demi hemat ruang
-    vertikal halaman."""
-    rows = []
-    for i in range(0, len(cells), 2):
-        pair = cells[i:i + 2]
-        if len(pair) == 1:
-            pair.append("")
-        rows.append(f'<tr><td class="{cell_class}">{pair[0]}</td><td class="{cell_class}">{pair[1]}</td></tr>')
-    return f'<table class="{table_class}" cellspacing="0" cellpadding="0">' + "".join(rows) + "</table>"
 
 
 def _build_highlight_page_html(data: dict) -> str:
@@ -883,92 +906,6 @@ def _build_region_page_html(region_name: str, region: dict) -> str:
     """
 
 
-def _build_keyword_dictionary_html() -> str:
-    """Render kamus keyword (13 kategori) sbg tabel 2 kolom yang rapi - dipakai di
-    halaman metodologi. Tabel (bukan flexbox) krn WeasyPrint 60.2 kurang stabil
-    dgn flex-wrap+gap (lihat catatan yang sama di _build_highlight_page_html)."""
-    cells = [
-        f"""
-        <div class="keyword-block">
-            <span class="keyword-cat">{html.escape(category)}</span>
-            <span class="keyword-list">{html.escape(keywords)}</span>
-        </div>
-        """
-        for category, keywords in CATEGORY_KEYWORDS.items()
-    ]
-    return _two_col_table(cells, "keyword-table", "keyword-cell")
-
-
-def _build_methodology_html() -> str:
-    """Halaman terakhir: metodologi penyusunan laporan (sumber data, pemrosesan AI/
-    LLM, kamus keyword, struktur laporan, rencana pengembangan, keterbatasan)."""
-    return f"""
-    <div class="content-page methodology-page">
-        <div class="section-head">
-            <span class="section-title">Metodologi Penyusunan Laporan</span>
-        </div>
-
-        <div class="method-block">
-            <div class="method-heading">Sumber Data</div>
-            <p class="method-text">
-                Berita dikumpulkan otomatis dari agregasi Google News (RSS) lintas media nasional dan
-                regional, mencakup 2 umpan berita ekonomi umum dan 5 umpan khusus per wilayah kerja
-                (Sumatera, Jawa, Kalimantan, Balinusra, Sulampua). Periode pengambilan dibatasi pada
-                24 jam terakhir sebelum laporan diterbitkan. Hanya berita dari media yang termasuk
-                dalam daftar sumber terverifikasi (nasional dan regional per wilayah kerja) yang
-                diteruskan ke tahap pemrosesan berikutnya.
-            </p>
-        </div>
-
-        <div class="method-block">
-            <div class="method-heading">Pemrosesan &amp; Sintesis (AI/LLM)</div>
-            <p class="method-text">
-                Seluruh artikel yang lolos penyaringan sumber diproses menggunakan <em>large language
-                model</em> (LLM), yang mengklasifikasikan setiap berita ke dalam kerangka laporan
-                ekonomi regional (Sisi Permintaan, Sisi Penawaran/Lapangan Usaha, dan Inflasi per
-                komponen) berpedoman pada kamus keyword di bawah, memetakan wilayah/provinsi yang
-                relevan, serta menyusun ringkasan wilayah dan highlight lintas-tema secara otomatis.
-            </p>
-        </div>
-
-        <div class="method-block">
-            <div class="method-heading">Kamus Keyword Klasifikasi</div>
-            <p class="method-text">
-                Digunakan sebagai acuan (bukan syarat mutlak/exact-match) bagi LLM dalam menentukan
-                kategori paling sesuai untuk tiap berita.
-            </p>
-            {_build_keyword_dictionary_html()}
-        </div>
-
-        <div class="method-block">
-            <div class="method-heading">Rencana Pengembangan</div>
-            <p class="method-text">
-                Beberapa area yang masih terus disempurnakan ke depan:
-            </p>
-            <ul class="method-list">
-                <li>Penyempurnaan kamus keyword klasifikasi, agar pemetaan berita ke kategori
-                    (Sisi Permintaan/Penawaran/Inflasi) makin presisi.</li>
-                <li>Penyaringan dan pemilihan kredibilitas sumber media, agar cakupan berita makin
-                    relevan dan terpercaya.</li>
-                <li>Penyesuaian kualitas substansi laporan dengan kebutuhan tracking ekonomi
-                    Departemen Regional secara lebih spesifik.</li>
-            </ul>
-        </div>
-
-        <div class="method-block">
-            <div class="method-heading">Keterbatasan</div>
-            <p class="method-text">
-                Sistem ini masih dalam tahap pengembangan (bukan versi final) - metodologi, cakupan
-                sumber, kamus klasifikasi, dan akurasi masih terus disempurnakan dari waktu ke waktu.
-                Laporan disusun otomatis dari sumber berita publik dan dapat memuat keterbatasan
-                cakupan atau interpretasi. Bukan merupakan rilis resmi Bank Indonesia maupun
-                Departemen Regional, dan disusun untuk keperluan internal.
-            </p>
-        </div>
-    </div>
-    """
-
-
 def build_html(data: dict, date_str: str) -> str:
     bi_logo_b64 = _b64_image(BI_LOGO_PATH)
     dr_logo_b64 = _b64_image(DR_LOGO_PATH)
@@ -983,7 +920,6 @@ def build_html(data: dict, date_str: str) -> str:
             _build_region_page_html(region_name, by_region_name.get(region_name))
             for region_name in REGIONS
         )
-        + _build_methodology_html()
     )
 
     return f"""<!DOCTYPE html>
