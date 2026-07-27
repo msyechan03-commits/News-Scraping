@@ -7,3 +7,12 @@ __pycache__/
 output/caption.txt
 output/pdf_filename.txt
 output/*.png
+
+# Koran scraper temporary files
+koran_output/
+koran_images/
+koran_ocr_output/
+output/report_data.json
+
+# Sandbox development (jangan push ke repo existing)
+wa-business-sandbox/

@@ -2,9 +2,9 @@ name: Rangkuman Berita Ekonomi Harian
 
 on:
   schedule:
-    # 00:00 UTC = 07:00 WIB (Jakarta). Ubah sesuai jam yang Anda mau.
-    - cron: "0 0 * * *"
-  workflow_dispatch: {}   # supaya bisa juga dijalankan manual dari tab "Actions" kalau perlu
+    # 05:00 UTC = 12:00 WIB (Jakarta).
+    - cron: "0 5 * * 1-5"
+  workflow_dispatch: {}   # supaya bisa juga dijalankan manual dari tab "Actions"
 
 permissions:
   contents: write   # perlu untuk commit+push PDF hasil generate ke repo
@@ -27,12 +27,14 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt
 
-      - name: Generate rangkuman & PDF
+      - name: Generate rangkuman & PDF (RSS + Koran OCR)
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: python scrape_and_send.py generate
+          CNR_USERNAME: ${{ secrets.CNR_USERNAME }}
+          CNR_PASSWORD: ${{ secrets.CNR_PASSWORD }}
+        run: python pipeline.py generate
 
-      - name: Commit & push PDF ke repo (supaya punya URL publik)
+      - name: Commit & push PDF ke repo
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -40,10 +42,9 @@ jobs:
           git commit -m "chore: update rangkuman harian $(date -u +'%Y-%m-%d')" || echo "Tidak ada perubahan untuk di-commit"
           git push
 
-      - name: Kirim PDF ke WhatsApp lewat Twilio
+      - name: Kirim PDF ke WhatsApp via Business API
         env:
-          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
-          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
-          TWILIO_WHATSAPP_FROM: ${{ secrets.TWILIO_WHATSAPP_FROM }}
-          TWILIO_WHATSAPP_TO: ${{ secrets.TWILIO_WHATSAPP_TO }}
-        run: python scrape_and_send.py send
+          WA_PHONE_NUMBER_ID: ${{ secrets.WA_PHONE_NUMBER_ID }}
+          WA_ACCESS_TOKEN: ${{ secrets.WA_ACCESS_TOKEN }}
+          WA_RECIPIENT: ${{ secrets.WA_RECIPIENT }}
+        run: python pipeline.py send

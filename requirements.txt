@@ -6,3 +6,6 @@ anthropic==0.117.1
 # Pasangan 60.2 + 0.8.0 ini kombinasi stabil yang teruji.
 weasyprint==60.2
 pydyf==0.8.0
+# Koran OCR pipeline dependencies
+PyMuPDF==1.25.5
+Pillow==11.2.1
