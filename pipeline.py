@@ -342,8 +342,8 @@ _ITEM_PROPS = {
     "province": {"type": "string", "description": "Provinsi spesifik yang disebut di berita (mis. 'Sumatera Barat', 'Jawa Barat'). Kosongkan kalau berita tidak menyebut provinsi spesifik."},
     "title": {"type": "string"},
     "body": {"type": "string", "description": "1-3 kalimat. Kuantitatif (angka/persentase) kalau tersedia di berita, kualitatif/naratif kalau tidak."},
-    "source_id": {"type": "integer", "description": "Salin PERSIS angka ID dari data sumber berita ini (field 'ID' pada data - bukan menghitung/menebak sendiri)."},
-    "source_name": {"type": "string", "description": "Nama media, disalin persis dari field Sumber pada data."},
+    "source_id": {"type": "integer", "description": "Untuk berita RSS: salin PERSIS angka ID dari field 'ID' pada data. Untuk berita KORAN CETAK (OCR): WAJIB isi -1."},
+    "source_name": {"type": "string", "description": "Untuk RSS: nama media dari field Sumber. Untuk KORAN CETAK: format 'NAMA KORAN, HAL X (CETAK)' mis. 'BISNIS INDONESIA, HAL 9 (CETAK)'."},
 }
 _ITEM_REQUIRED = ["date", "province", "title", "body", "source_id", "source_name"]
 
@@ -548,6 +548,11 @@ SUMBER DATA:
     — mis. "BISNIS INDONESIA, HAL 9 (CETAK)" atau "KONTAN, HAL 1 (CETAK)").
     TIDAK ADA section koran terpisah — semua berita koran HARUS masuk ke section yang ada.
 
+⚠️ WAJIB: MINIMAL 3-5 item dari KORAN CETAK harus masuk ke output JSON (global_national
+dan/atau regions). Koran cetak = data bernilai tinggi dari OCR. Jika kamu tidak memasukkan
+item koran cetak dengan source_id=-1 dan source_name berisi "(CETAK)", output dianggap GAGAL.
+Baca bagian "BERITA KORAN CETAK" di bawah dengan seksama dan ekstrak berita ekonomi darinya.
+
 ATURAN PENTING:
 - TIDAK WAJIB semua 5 wilayah terisi. Hanya yang benar-benar punya berita.
 - Sub-bagian kosong → array kosong, jangan dikarang.
@@ -575,7 +580,6 @@ Buatkan output berikut:
         max_tokens=24000,
         thinking={"type": "adaptive"},
         output_config={
-            "effort": "low",
             "format": {"type": "json_schema", "schema": REPORT_SCHEMA},
         },
         messages=[{"role": "user", "content": prompt}],
