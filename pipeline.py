@@ -359,7 +359,7 @@ REPORT_SCHEMA = {
         "national_summary": {"type": "string"},
         "global_national": {
             "type": "array",
-            "description": "Section 1: Perkembangan Ekonomi Global dan Nasional. Maks 6 item.",
+            "description": "Section 1: Perkembangan Ekonomi Global dan Nasional. Maks 10 item, minimal 3 dari koran cetak.",
             "items": {
                 "type": "object",
                 "properties": {
@@ -560,17 +560,16 @@ ATURAN PENTING:
 - "global_summary" & "national_summary": NETRAL, rekap fakta.
 
 Buatkan output berikut:
-1. "global_national" - Maks 6 item total.
+1. "global_national" - Maks 10 item total (MINIMAL 3 item harus dari koran cetak dgn source_id=-1).
 2. "global_summary" dan "national_summary"
 3. "regions" - per wilayah, termasuk "region_summary"
 4. "caption" - versi singkat gaya WhatsApp dengan NUMBERED LIST:
    JANGAN tulis baris tanggal/sapaan di awal (sistem tambahkan otomatis).
    Format: numbered list 5-8 poin berita terpenting lintas semua section.
    Tiap poin: nomor + judul singkat (*bold* pakai asterisk) + 1-2 kalimat inti.
-   Contoh format:
-   1. *Gubernur BI Mundur* — Perry Warjiyo mengundurkan diri, Destry ditunjuk
-   sebagai pejabat sementara.
-   2. *Harga Minyak Melandai* — Harga minyak turun, mendorong bursa Asia menguat.
+   PENTING: Setiap poin HARUS dipisah baris baru (\n). JANGAN gabung semua poin dalam 1 baris.
+   Contoh format (perhatikan setiap poin di baris terpisah):
+   1. *Gubernur BI Mundur* — Perry Warjiyo mengundurkan diri, Destry ditunjuk sebagai pejabat sementara.\n2. *Harga Minyak Melandai* — Harga minyak turun, mendorong bursa Asia menguat.
    Kalau ada berita dari koran cetak, sertakan dengan label 📰.
    Total ±300-400 kata, bahasa Indonesia, ringkas, tanpa markdown heading (#).
 5. "report_title" (mis. 'Rangkuman Ekonomi Harian')."""
@@ -580,6 +579,7 @@ Buatkan output berikut:
         max_tokens=24000,
         thinking={"type": "adaptive"},
         output_config={
+            "effort": "low",
             "format": {"type": "json_schema", "schema": REPORT_SCHEMA},
         },
         messages=[{"role": "user", "content": prompt}],
