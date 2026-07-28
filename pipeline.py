@@ -1147,10 +1147,9 @@ def send_whatsapp(caption: str, pdf_path: str):
         "text": {"body": caption_truncated},
     }
     resp = requests.post(f"{base_url}/messages", headers=headers_json, json=text_payload)
+    print(f"  Response: {resp.status_code} {resp.text}")
     if resp.status_code >= 400:
         print(f"GAGAL kirim caption: {resp.status_code} {resp.text}", file=sys.stderr)
-    else:
-        print(f"Caption terkirim: HTTP {resp.status_code}")
 
     # Step 2: Upload PDF
     print("Mengupload PDF...")
@@ -1181,10 +1180,10 @@ def send_whatsapp(caption: str, pdf_path: str):
         },
     }
     resp = requests.post(f"{base_url}/messages", headers=headers_json, json=doc_payload)
+    print(f"  Response: {resp.status_code} {resp.text}")
     if resp.status_code >= 400:
         print(f"GAGAL kirim PDF: {resp.status_code} {resp.text}", file=sys.stderr)
         sys.exit(1)
-    print(f"PDF terkirim: HTTP {resp.status_code}")
 
 
 # ---------------------------------------------------------------------------
