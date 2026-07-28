@@ -2,8 +2,8 @@ name: Rangkuman Berita Ekonomi Harian
 
 on:
   schedule:
-    # 10:00 UTC = 17:00 WIB (Jakarta). TEST DULU, nanti ubah ke 05:00 UTC (12:00 WIB).
-    - cron: "0 10 * * *"
+    # 04:00 UTC = 11:00 WIB (Jakarta). TEST — nanti ubah ke 01:00 UTC (08:00 WIB).
+    - cron: "0 4 * * *"
   workflow_dispatch: {}   # supaya bisa juga dijalankan manual dari tab "Actions"
 
 permissions:
