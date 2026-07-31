@@ -1136,7 +1136,35 @@ def send_whatsapp(caption: str, pdf_path: str):
         "Content-Type": "application/json",
     }
 
-    # Step 1: Kirim caption dulu (sebagai pesan teks)
+    # Step 0: Kirim template dulu untuk buka conversation window (business-initiated)
+    wib = datetime.timezone(datetime.timedelta(hours=7))
+    tanggal_str = datetime.datetime.now(wib).strftime("%d %B %Y")
+    print(f"Mengirim template 'daily_briefing' (tanggal: {tanggal_str})...")
+    template_payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": recipient,
+        "type": "template",
+        "template": {
+            "name": "daily_briefing",
+            "language": {"code": "id"},
+            "components": [
+                {
+                    "type": "body",
+                    "parameters": [
+                        {"type": "text", "text": tanggal_str}
+                    ],
+                }
+            ],
+        },
+    }
+    resp = requests.post(f"{base_url}/messages", headers=headers_json, json=template_payload)
+    print(f"  Response: {resp.status_code} {resp.text}")
+    if resp.status_code >= 400:
+        print(f"GAGAL kirim template: {resp.status_code} {resp.text}", file=sys.stderr)
+    time.sleep(3)  # Tunggu sebentar agar window terbuka
+
+    # Step 1: Kirim caption (sebagai pesan teks)
     print("Mengirim caption ke WhatsApp...")
     caption_truncated = caption[:4096]  # WA Business API limit 4096 char
     text_payload = {
