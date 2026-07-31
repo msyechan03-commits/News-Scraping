@@ -1139,29 +1139,38 @@ def send_whatsapp(caption: str, pdf_path: str):
     # Step 0: Kirim template dulu untuk buka conversation window (business-initiated)
     wib = datetime.timezone(datetime.timedelta(hours=7))
     tanggal_str = datetime.datetime.now(wib).strftime("%d %B %Y")
-    print(f"Mengirim template 'daily_briefing' (tanggal: {tanggal_str})...")
-    template_payload = {
-        "messaging_product": "whatsapp",
-        "recipient_type": "individual",
-        "to": recipient,
-        "type": "template",
-        "template": {
-            "name": "daily_briefing",
-            "language": {"code": "id"},
-            "components": [
-                {
-                    "type": "body",
-                    "parameters": [
-                        {"type": "text", "text": tanggal_str}
-                    ],
-                }
-            ],
-        },
-    }
-    resp = requests.post(f"{base_url}/messages", headers=headers_json, json=template_payload)
-    print(f"  Response: {resp.status_code} {resp.text}")
-    if resp.status_code >= 400:
-        print(f"GAGAL kirim template: {resp.status_code} {resp.text}", file=sys.stderr)
+    template_names = ["daily_briefing", "laporan_harian"]  # coba keduanya
+    template_sent = False
+    for tpl_name in template_names:
+        print(f"Mencoba template '{tpl_name}' (tanggal: {tanggal_str})...")
+        template_payload = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": recipient,
+            "type": "template",
+            "template": {
+                "name": tpl_name,
+                "language": {"code": "id"},
+                "components": [
+                    {
+                        "type": "body",
+                        "parameters": [
+                            {"type": "text", "text": tanggal_str}
+                        ],
+                    }
+                ],
+            },
+        }
+        resp = requests.post(f"{base_url}/messages", headers=headers_json, json=template_payload)
+        print(f"  Response: {resp.status_code} {resp.text}")
+        if resp.status_code < 400:
+            template_sent = True
+            print(f"  Template '{tpl_name}' berhasil dikirim!")
+            break
+        else:
+            print(f"  Template '{tpl_name}' gagal, coba berikutnya...")
+    if not template_sent:
+        print("WARNING: Semua template gagal. Tetap lanjut kirim caption+PDF (best-effort).", file=sys.stderr)
     time.sleep(3)  # Tunggu sebentar agar window terbuka
 
     # Step 1: Kirim caption (sebagai pesan teks)
