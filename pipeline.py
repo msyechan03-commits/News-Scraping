@@ -1139,7 +1139,7 @@ def send_whatsapp(caption: str, pdf_path: str):
     # Step 0: Kirim template dulu untuk buka conversation window (business-initiated)
     wib = datetime.timezone(datetime.timedelta(hours=7))
     tanggal_str = datetime.datetime.now(wib).strftime("%d %B %Y")
-    template_names = ["daily_briefing", "laporan_harian"]  # coba keduanya
+    template_names = ["news_update", "daily_briefing"]  # coba news_update dulu
     template_sent = False
     for tpl_name in template_names:
         print(f"Mencoba template '{tpl_name}' (tanggal: {tanggal_str})...")
