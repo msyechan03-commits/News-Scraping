@@ -1119,8 +1119,34 @@ def build_pdf(data: dict, date_str: str, pdf_path: str):
 # ---------------------------------------------------------------------------
 # 5. Kirim via WhatsApp Business Cloud API (bukan Twilio)
 # ---------------------------------------------------------------------------
+def _build_short_caption(caption: str) -> str:
+    """Potong caption agar muat di body template (max 800 karakter).
+    Ambil baris-baris bernomor, potong jika melebihi batas."""
+    # Hapus header "📅 *Selasa, ...* — Selamat pagi!" kalau ada
+    lines = caption.split("\n")
+    content_lines = []
+    for line in lines:
+        stripped = line.strip()
+        # Skip header line dan baris kosong di awal
+        if stripped.startswith("📅") or (not stripped and not content_lines):
+            continue
+        content_lines.append(stripped)
+
+    short = "\n".join(content_lines).strip()
+    if len(short) <= 800:
+        return short
+    # Potong per baris agar tidak terpotong di tengah kalimat
+    result = ""
+    for line in content_lines:
+        if len(result) + len(line) + 1 > 780:
+            break
+        result += line + "\n"
+    return result.strip() + "\n..."
+
+
 def send_whatsapp(caption: str, pdf_path: str):
-    """Upload PDF lalu kirim via WA Business API sebagai dokumen + caption."""
+    """Kirim PDF + ringkasan via 1 template message (document header + body variables).
+    Tidak perlu service window / user kirim 'hi' dulu."""
     phone_number_id = os.environ.get("WA_PHONE_NUMBER_ID", "")
     access_token = os.environ.get("WA_ACCESS_TOKEN", "")
     recipient = os.environ.get("WA_RECIPIENT", "")
@@ -1136,20 +1162,74 @@ def send_whatsapp(caption: str, pdf_path: str):
         "Content-Type": "application/json",
     }
 
-    # Step 0: Kirim template dulu untuk buka conversation window (business-initiated)
+    # Step 1: Upload PDF ke Media API
+    print("Mengupload PDF...")
+    with open(pdf_path, "rb") as f:
+        resp = requests.post(
+            f"{base_url}/media",
+            headers=headers_auth,
+            files={"file": (os.path.basename(pdf_path), f, "application/pdf")},
+            data={"messaging_product": "whatsapp"},
+        )
+    print(f"  Response: {resp.status_code} {resp.text}")
+    if resp.status_code >= 400:
+        print(f"GAGAL upload PDF: {resp.status_code} {resp.text}", file=sys.stderr)
+        sys.exit(1)
+    media_id = resp.json()["id"]
+    print(f"PDF uploaded, media_id: {media_id}")
+
+    # Step 2: Kirim template 'news_report' dengan document header + body variables
     wib = datetime.timezone(datetime.timedelta(hours=7))
     tanggal_str = datetime.datetime.now(wib).strftime("%d %B %Y")
-    template_names = ["news_update", "daily_briefing"]  # coba news_update dulu
-    template_sent = False
-    for tpl_name in template_names:
-        print(f"Mencoba template '{tpl_name}' (tanggal: {tanggal_str})...")
-        template_payload = {
+    short_caption = _build_short_caption(caption)
+
+    print(f"Mengirim template 'news_report' (tanggal: {tanggal_str})...")
+    print(f"  Ringkasan ({len(short_caption)} chars):\n{short_caption[:200]}...")
+
+    template_payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": recipient,
+        "type": "template",
+        "template": {
+            "name": "news_report",
+            "language": {"code": "id"},
+            "components": [
+                {
+                    "type": "header",
+                    "parameters": [
+                        {
+                            "type": "document",
+                            "document": {
+                                "id": media_id,
+                                "filename": os.path.basename(pdf_path),
+                            },
+                        }
+                    ],
+                },
+                {
+                    "type": "body",
+                    "parameters": [
+                        {"type": "text", "text": tanggal_str},
+                        {"type": "text", "text": short_caption},
+                    ],
+                },
+            ],
+        },
+    }
+    resp = requests.post(f"{base_url}/messages", headers=headers_json, json=template_payload)
+    print(f"  Response: {resp.status_code} {resp.text}")
+    if resp.status_code >= 400:
+        print(f"GAGAL kirim template: {resp.status_code} {resp.text}", file=sys.stderr)
+        # Fallback: coba template lama news_update (tanpa PDF)
+        print("Fallback: mencoba template 'news_update'...")
+        fallback_payload = {
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
             "to": recipient,
             "type": "template",
             "template": {
-                "name": tpl_name,
+                "name": "news_update",
                 "language": {"code": "id"},
                 "components": [
                     {
@@ -1161,66 +1241,13 @@ def send_whatsapp(caption: str, pdf_path: str):
                 ],
             },
         }
-        resp = requests.post(f"{base_url}/messages", headers=headers_json, json=template_payload)
-        print(f"  Response: {resp.status_code} {resp.text}")
-        if resp.status_code < 400:
-            template_sent = True
-            print(f"  Template '{tpl_name}' berhasil dikirim!")
-            break
-        else:
-            print(f"  Template '{tpl_name}' gagal, coba berikutnya...")
-    if not template_sent:
-        print("WARNING: Semua template gagal. Tetap lanjut kirim caption+PDF (best-effort).", file=sys.stderr)
-    time.sleep(3)  # Tunggu sebentar agar window terbuka
-
-    # Step 1: Kirim caption (sebagai pesan teks)
-    print("Mengirim caption ke WhatsApp...")
-    caption_truncated = caption[:4096]  # WA Business API limit 4096 char
-    text_payload = {
-        "messaging_product": "whatsapp",
-        "recipient_type": "individual",
-        "to": recipient,
-        "type": "text",
-        "text": {"body": caption_truncated},
-    }
-    resp = requests.post(f"{base_url}/messages", headers=headers_json, json=text_payload)
-    print(f"  Response: {resp.status_code} {resp.text}")
-    if resp.status_code >= 400:
-        print(f"GAGAL kirim caption: {resp.status_code} {resp.text}", file=sys.stderr)
-
-    # Step 2: Upload PDF
-    print("Mengupload PDF...")
-    with open(pdf_path, "rb") as f:
-        resp = requests.post(
-            f"{base_url}/media",
-            headers=headers_auth,
-            files={"file": (os.path.basename(pdf_path), f, "application/pdf")},
-            data={"messaging_product": "whatsapp"},
-        )
-    if resp.status_code >= 400:
-        print(f"GAGAL upload PDF: {resp.status_code} {resp.text}", file=sys.stderr)
-        sys.exit(1)
-    media_id = resp.json()["id"]
-    print(f"PDF uploaded, media_id: {media_id}")
-
-    # Step 3: Kirim PDF sebagai dokumen
-    print("Mengirim PDF ke WhatsApp...")
-    doc_payload = {
-        "messaging_product": "whatsapp",
-        "recipient_type": "individual",
-        "to": recipient,
-        "type": "document",
-        "document": {
-            "id": media_id,
-            "caption": f"Rangkuman Berita Ekonomi Harian",
-            "filename": os.path.basename(pdf_path),
-        },
-    }
-    resp = requests.post(f"{base_url}/messages", headers=headers_json, json=doc_payload)
-    print(f"  Response: {resp.status_code} {resp.text}")
-    if resp.status_code >= 400:
-        print(f"GAGAL kirim PDF: {resp.status_code} {resp.text}", file=sys.stderr)
-        sys.exit(1)
+        resp2 = requests.post(f"{base_url}/messages", headers=headers_json, json=fallback_payload)
+        print(f"  Fallback response: {resp2.status_code} {resp2.text}")
+        if resp2.status_code >= 400:
+            print("GAGAL: Semua template gagal.", file=sys.stderr)
+            sys.exit(1)
+    else:
+        print("Template 'news_report' berhasil dikirim (PDF + ringkasan)!")
 
 
 # ---------------------------------------------------------------------------
