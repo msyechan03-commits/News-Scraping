@@ -1132,16 +1132,22 @@ def _build_short_caption(caption: str) -> str:
             continue
         content_lines.append(stripped)
 
-    short = "\n".join(content_lines).strip()
+    # WA template params TIDAK BOLEH mengandung newline — ganti dengan " | "
+    short = " | ".join(line for line in content_lines if line)
     if len(short) <= 800:
         return short
-    # Potong per baris agar tidak terpotong di tengah kalimat
-    result = ""
+    # Potong per item agar tidak terpotong di tengah kalimat
+    result_parts = []
+    current_len = 0
     for line in content_lines:
-        if len(result) + len(line) + 1 > 780:
+        if not line:
+            continue
+        addition = len(line) + 3  # " | " separator
+        if current_len + addition > 780:
             break
-        result += line + "\n"
-    return result.strip() + "\n..."
+        result_parts.append(line)
+        current_len += addition
+    return " | ".join(result_parts) + " | ..."
 
 
 def send_whatsapp(caption: str, pdf_path: str):
