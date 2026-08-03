@@ -40,6 +40,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add "output/"*.pdf
           git commit -m "chore: update rangkuman harian $(date -u +'%Y-%m-%d')" || echo "Tidak ada perubahan untuk di-commit"
+          git pull --rebase || true
           git push
 
       - name: Kirim PDF ke WhatsApp via Business API
