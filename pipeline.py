@@ -1150,48 +1150,11 @@ def _build_short_caption(caption: str) -> str:
     return " ▸ ".join(result_parts) + " ▸ ..."
 
 
-def send_whatsapp(caption: str, pdf_path: str):
-    """Kirim PDF + ringkasan via 1 template message (document header + body variables).
-    Tidak perlu service window / user kirim 'hi' dulu."""
-    phone_number_id = os.environ.get("WA_PHONE_NUMBER_ID", "")
-    access_token = os.environ.get("WA_ACCESS_TOKEN", "")
-    recipient = os.environ.get("WA_RECIPIENT", "")
-
-    if not all([phone_number_id, access_token, recipient]):
-        print("ERROR: WA_PHONE_NUMBER_ID, WA_ACCESS_TOKEN, atau WA_RECIPIENT belum diisi di .env")
-        sys.exit(1)
-
-    base_url = f"https://graph.facebook.com/v25.0/{phone_number_id}"
-    headers_auth = {"Authorization": f"Bearer {access_token}"}
-    headers_json = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json",
-    }
-
-    # Step 1: Upload PDF ke Media API
-    print("Mengupload PDF...")
-    with open(pdf_path, "rb") as f:
-        resp = requests.post(
-            f"{base_url}/media",
-            headers=headers_auth,
-            files={"file": (os.path.basename(pdf_path), f, "application/pdf")},
-            data={"messaging_product": "whatsapp"},
-        )
-    print(f"  Response: {resp.status_code} {resp.text}")
-    if resp.status_code >= 400:
-        print(f"GAGAL upload PDF: {resp.status_code} {resp.text}", file=sys.stderr)
-        sys.exit(1)
-    media_id = resp.json()["id"]
-    print(f"PDF uploaded, media_id: {media_id}")
-
-    # Step 2: Kirim template 'news_report' dengan document header + body variables
-    wib = datetime.timezone(datetime.timedelta(hours=7))
-    tanggal_str = datetime.datetime.now(wib).strftime("%d %B %Y")
-    short_caption = _build_short_caption(caption)
-
-    print(f"Mengirim template 'news_report' (tanggal: {tanggal_str})...")
-    print(f"  Ringkasan ({len(short_caption)} chars):\n{short_caption[:200]}...")
-
+def _send_to_recipient(recipient: str, base_url: str, headers_json: dict,
+                       media_id: str, pdf_path: str, tanggal_str: str,
+                       short_caption: str) -> bool:
+    """Kirim template news_report ke 1 nomor. Return True jika berhasil."""
+    print(f"\n--- Kirim ke {recipient} ---")
     template_payload = {
         "messaging_product": "whatsapp",
         "recipient_type": "individual",
@@ -1225,35 +1188,87 @@ def send_whatsapp(caption: str, pdf_path: str):
     }
     resp = requests.post(f"{base_url}/messages", headers=headers_json, json=template_payload)
     print(f"  Response: {resp.status_code} {resp.text}")
+    if resp.status_code < 400:
+        print(f"  Berhasil kirim ke {recipient}!")
+        return True
+
+    print(f"  GAGAL news_report ke {recipient}, coba fallback news_update...", file=sys.stderr)
+    fallback_payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": recipient,
+        "type": "template",
+        "template": {
+            "name": "news_update",
+            "language": {"code": "id"},
+            "components": [
+                {
+                    "type": "body",
+                    "parameters": [
+                        {"type": "text", "text": tanggal_str}
+                    ],
+                }
+            ],
+        },
+    }
+    resp2 = requests.post(f"{base_url}/messages", headers=headers_json, json=fallback_payload)
+    print(f"  Fallback response: {resp2.status_code} {resp2.text}")
+    return resp2.status_code < 400
+
+
+def send_whatsapp(caption: str, pdf_path: str):
+    """Kirim PDF + ringkasan ke semua penerima (WA_RECIPIENT bisa comma-separated).
+    Contoh: WA_RECIPIENT=628814090814,6281234567890,6289876543210"""
+    phone_number_id = os.environ.get("WA_PHONE_NUMBER_ID", "")
+    access_token = os.environ.get("WA_ACCESS_TOKEN", "")
+    recipients_raw = os.environ.get("WA_RECIPIENT", "")
+
+    if not all([phone_number_id, access_token, recipients_raw]):
+        print("ERROR: WA_PHONE_NUMBER_ID, WA_ACCESS_TOKEN, atau WA_RECIPIENT belum diisi di .env")
+        sys.exit(1)
+
+    # Support multi-recipient: pisahkan dengan koma
+    recipients = [r.strip() for r in recipients_raw.split(",") if r.strip()]
+    print(f"Penerima: {len(recipients)} nomor — {', '.join(recipients)}")
+
+    base_url = f"https://graph.facebook.com/v25.0/{phone_number_id}"
+    headers_auth = {"Authorization": f"Bearer {access_token}"}
+    headers_json = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+    }
+
+    # Step 1: Upload PDF ke Media API (sekali saja, pakai untuk semua penerima)
+    print("Mengupload PDF...")
+    with open(pdf_path, "rb") as f:
+        resp = requests.post(
+            f"{base_url}/media",
+            headers=headers_auth,
+            files={"file": (os.path.basename(pdf_path), f, "application/pdf")},
+            data={"messaging_product": "whatsapp"},
+        )
+    print(f"  Response: {resp.status_code} {resp.text}")
     if resp.status_code >= 400:
-        print(f"GAGAL kirim template: {resp.status_code} {resp.text}", file=sys.stderr)
-        # Fallback: coba template lama news_update (tanpa PDF)
-        print("Fallback: mencoba template 'news_update'...")
-        fallback_payload = {
-            "messaging_product": "whatsapp",
-            "recipient_type": "individual",
-            "to": recipient,
-            "type": "template",
-            "template": {
-                "name": "news_update",
-                "language": {"code": "id"},
-                "components": [
-                    {
-                        "type": "body",
-                        "parameters": [
-                            {"type": "text", "text": tanggal_str}
-                        ],
-                    }
-                ],
-            },
-        }
-        resp2 = requests.post(f"{base_url}/messages", headers=headers_json, json=fallback_payload)
-        print(f"  Fallback response: {resp2.status_code} {resp2.text}")
-        if resp2.status_code >= 400:
-            print("GAGAL: Semua template gagal.", file=sys.stderr)
-            sys.exit(1)
-    else:
-        print("Template 'news_report' berhasil dikirim (PDF + ringkasan)!")
+        print(f"GAGAL upload PDF: {resp.status_code} {resp.text}", file=sys.stderr)
+        sys.exit(1)
+    media_id = resp.json()["id"]
+    print(f"PDF uploaded, media_id: {media_id}")
+
+    # Step 2: Siapkan data template
+    wib = datetime.timezone(datetime.timedelta(hours=7))
+    tanggal_str = datetime.datetime.now(wib).strftime("%d %B %Y")
+    short_caption = _build_short_caption(caption)
+    print(f"Ringkasan ({len(short_caption)} chars): {short_caption[:200]}...")
+
+    # Step 3: Kirim ke semua penerima
+    success = 0
+    for recipient in recipients:
+        if _send_to_recipient(recipient, base_url, headers_json, media_id,
+                              pdf_path, tanggal_str, short_caption):
+            success += 1
+        time.sleep(1)  # Jeda antar pengiriman agar tidak rate-limited
+
+    print(f"\nHasil: {success}/{len(recipients)} penerima berhasil.")
 
 
 # ---------------------------------------------------------------------------
