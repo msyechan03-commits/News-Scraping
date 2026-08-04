@@ -2,8 +2,8 @@ name: Rangkuman Berita Ekonomi Harian
 
 on:
   schedule:
-    # 00:00 UTC = 07:00 WIB (Jakarta), setiap hari — jadwal asli yang sudah terbukti jalan.
-    - cron: "0 0 * * *"
+    # 18:00 UTC = 01:00 WIB (Jakarta), setiap hari — masuk antrian lebih awal, dengan delay GitHub ~7-12 jam diharapkan jalan pagi WIB.
+    - cron: "0 18 * * *"
   workflow_dispatch: {}   # supaya bisa juga dijalankan manual dari tab "Actions"
 
 permissions:
