@@ -686,7 +686,7 @@ def _build_highlight_page_html(data: dict) -> str:
         f"""
         <div class="exec-block">
             <div class="exec-subtitle">{html.escape(subtitle)}</div>
-            <p class="exec-text">{html.escape(text) if text else "Tidak ada perkembangan signifikan yang tercatat hari ini."}</p>
+            <p class="exec-text">{html.escape(text) if text else "Tidak ada berita di hari ini."}</p>
         </div>
         """
         for subtitle, text in blocks
@@ -707,7 +707,7 @@ def _build_global_national_page_html(global_national: list) -> str:
     national_items = [i for i in global_national if i.get("scope") == "Nasional"]
     body = _render_subgroup("Global", global_items, "") + _render_subgroup("Nasional", national_items, "")
     if not body:
-        body = _render_empty_state("Tidak ada perkembangan ekonomi global/nasional signifikan yang tercatat hari ini.")
+        body = _render_empty_state("Tidak ada berita (global/nasional) di hari ini.")
     return f"""
     <div class="content-page">
         <div class="section-head">
@@ -726,14 +726,13 @@ def _build_region_page_html(region_name: str, region: dict) -> str:
     region_summary = (region.get("region_summary") or "").strip()
 
     demand_html = "".join(_render_item(it, it.get("category", "")) for it in demand) or _render_empty_state(
-        "Tidak ada perkembangan sisi permintaan yang tercatat untuk wilayah ini hari ini."
+        "Tidak ada berita (permintaan) di hari ini."
     )
     sectors_html = "".join(_render_item(it, it.get("category", "")) for it in sectors) or _render_empty_state(
-        "Tidak ada perkembangan sisi penawaran/lapangan usaha yang tercatat untuk wilayah ini hari ini."
+        "Tidak ada berita (lapangan usaha) di hari ini."
     )
     inflation_html = "".join(_render_item(it, it.get("component", "")) for it in inflation) or _render_empty_state(
-        "Belum ditemukan berita/data yang memuat angka atau perkembangan inflasi spesifik untuk "
-        "wilayah ini dalam periode laporan."
+        "Tidak ada berita (inflasi) di hari ini."
     )
 
     summary_html = (
@@ -1034,10 +1033,10 @@ def build_html(data: dict, date_str: str) -> str:
     }}
     .item-source {{
         font-size: 8pt;
-        color: #b9863f;
-        font-weight: 700;
+        color: #2a7ab5;
+        font-weight: 600;
         letter-spacing: 0.04em;
-        text-decoration: none;
+        text-decoration: underline;
         text-transform: uppercase;
     }}
     .direction-summary {{
