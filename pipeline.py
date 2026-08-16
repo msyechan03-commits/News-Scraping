@@ -299,51 +299,28 @@ def fetch_koran_articles(date_str: str) -> str:
 # 3. Claude summarization — sama persis + tambahan koran
 # ---------------------------------------------------------------------------
 CATEGORY_KEYWORDS = {
-    "Fiskal": "APBD, APBN, realisasi belanja, belanja modal, belanja pegawai, belanja barang dan jasa, "
-              "penyerapan anggaran, pagu anggaran, TKD, transfer ke daerah, DAU, DAK, DBH, dana desa, "
-              "SILPA, PAD, pajak daerah, retribusi daerah, opsen pajak, DIPA, KPPN, APBD Perubahan, "
-              "efisiensi anggaran, refocusing, defisit APBD, insentif fiskal, bansos, PKH, BLT, subsidi daerah",
-    "Konsumsi RT": "daya beli, penjualan eceran, indeks penjualan riil, omzet pedagang, konsumsi masyarakat, "
-                   "UMP, UMK, kenaikan upah, THR, gaji ke-13, penjualan kendaraan bermotor, penjualan motor, "
-                   "kredit konsumsi, KPR, tabungan masyarakat, e-commerce, harbolnas, belanja Lebaran, "
-                   "belanja Natal, mudik, libur sekolah, kelas menengah, PHK, Indeks Keyakinan Konsumen (IKK), "
-                   "konsumsi listrik industri, konsumsi BBM industri, konsumsi semen",
-    "Investasi": "PMA, PMDN, realisasi investasi, penanaman modal, BKPM, Kementerian Investasi, groundbreaking, "
-                 "peletakan batu pertama, ekspansi pabrik, penambahan kapasitas, capex, belanja modal perusahaan, "
-                 "KEK, kawasan industri, OSS, perizinan berusaha, PSN, proyek strategis nasional, IKN, "
-                 "Danantara, hilirisasi, komitmen investasi, MoU investasi",
-    "Ekspor": "ekspor, nilai ekspor, volume ekspor, neraca perdagangan, pengapalan, bea keluar, DMO, "
-              "larangan ekspor, negara tujuan ekspor, kontainer, TEUs, bea cukai, FOB, harga komoditas global, "
-              "permintaan Tiongkok, permintaan global, tarif impor AS, safeguard",
-    "Pertanian": "panen raya, luas tanam, luas panen, produktivitas, GKP, GKG, gabah, padi, jagung, pupuk "
-                 "subsidi, alsintan, El Nino, La Nina, kekeringan, banjir, sawah, OPT, hama, TBS, harga TBS, "
-                 "replanting, PSR, kakao, cengkeh, perikanan tangkap, budidaya udang, tambak, musim tanam, "
-                 "Bulog, serapan gabah, HPP gabah, food estate, cuaca ekstrem",
-    "Perdagangan": "perdagangan besar dan eceran, distribusi barang, pasar tradisional, grosir, distributor, "
-                   "arus barang, bongkar muat, stok barang, ritel modern, pusat perbelanjaan, wholesale",
-    "Pertambangan": "RKAB, IUP, IUPK, produksi batu bara, HBA, harga batubara acuan, lifting minyak, lifting "
-                    "gas, SKK Migas, bijih nikel, ore nikel, bauksit, timah, emas, tembaga, konsentrat",
-    "Konstruksi": "proyek infrastruktur, jalan tol, bendungan, jembatan, pembangunan bandara, pembangunan "
-                  "pelabuhan, progres fisik, kontraktor BUMN karya, tender proyek, konsumsi semen, properti",
-    "Industri Pengolahan": "pabrik, utilisasi kapasitas, PMI manufaktur, smelter, feronikel, NPI, katoda "
-                            "tembaga, MHP, alumina, refinery, oleochemical, kilang, petrokimia",
-    "Akmamin": "tingkat penghunian kamar, TPK, okupansi hotel, PHRI, wisatawan mancanegara, wisman, wisnus, "
-               "kunjungan wisatawan, MICE, restoran, kafe, kuliner, homestay",
-    "Inflasi Inti": "inflasi inti, core inflation, emas perhiasan, sewa rumah, kontrak rumah, upah ART, "
-                    "biaya pendidikan, SPP, tarif kesehatan, ekspektasi inflasi, imported inflation",
-    "Inflasi VF": "harga beras, cabai merah, cabai rawit, bawang merah, bawang putih, daging ayam ras, telur "
-                  "ayam ras, minyak goreng, MinyaKita, ikan segar, tomat, daging sapi, pasokan pangan",
-    "Inflasi AP": "BBM, Pertalite, Pertamax, Solar, LPG 3 kg, tarif listrik, TDL, tarif angkutan udara, tiket "
-                  "pesawat, tarif kereta, angkutan dalam kota, rokok, cukai hasil tembakau, air PDAM",
+    "Fiskal": "APBD, APBN, belanja modal/pegawai, penyerapan anggaran, TKD, DAU, DAK, DBH, dana desa, PAD, pajak daerah, DIPA, KPPN, bansos, PKH, BLT, subsidi",
+    "Konsumsi RT": "daya beli, penjualan eceran, omzet, UMP/UMK, THR, kendaraan bermotor, KPR, e-commerce, PHK, IKK, konsumsi semen/listrik/BBM",
+    "Investasi": "PMA, PMDN, penanaman modal, BKPM, groundbreaking, ekspansi pabrik, capex, KEK, kawasan industri, OSS, PSN, IKN, Danantara, hilirisasi",
+    "Ekspor": "ekspor, neraca perdagangan, bea keluar, DMO, kontainer, TEUs, harga komoditas global, tarif impor AS, safeguard",
+    "Pertanian": "panen, luas tanam, gabah/padi/jagung, pupuk subsidi, El Nino/La Nina, TBS, replanting, perikanan, Bulog, HPP gabah, food estate",
+    "Perdagangan": "perdagangan eceran, distribusi, pasar tradisional, grosir, bongkar muat, ritel modern",
+    "Pertambangan": "IUP, batu bara, HBA, lifting minyak/gas, SKK Migas, nikel, bauksit, timah, emas, tembaga",
+    "Konstruksi": "infrastruktur, jalan tol, bendungan, bandara, pelabuhan, kontraktor BUMN, tender, properti",
+    "Industri Pengolahan": "pabrik, utilisasi, PMI manufaktur, smelter, nikel/alumina/tembaga, refinery, kilang, petrokimia",
+    "Akmamin": "TPK, okupansi hotel, wisman, wisnus, MICE, restoran, kafe",
+    "Inflasi Inti": "inflasi inti, emas perhiasan, sewa rumah, biaya pendidikan, tarif kesehatan, ekspektasi inflasi",
+    "Inflasi VF": "harga beras, cabai, bawang, daging ayam, telur, minyak goreng, daging sapi, pasokan pangan",
+    "Inflasi AP": "BBM, Pertalite, Solar, LPG 3kg, tarif listrik, tiket pesawat, angkutan, rokok, cukai",
 }
 
 _ITEM_PROPS = {
-    "date": {"type": "string", "description": "Tanggal terbit berita, disalin PERSIS dari field Tanggal pada data sumber (mis. '23 Jul') - jangan dihitung/ditebak sendiri, kosongkan kalau field Tanggal kosong."},
-    "province": {"type": "string", "description": "Provinsi spesifik yang disebut di berita (mis. 'Sumatera Barat', 'Jawa Barat'). Kosongkan kalau berita tidak menyebut provinsi spesifik."},
+    "date": {"type": "string", "description": "Salin persis dari field Tanggal (mis. '23 Jul'), kosongkan jika tidak ada."},
+    "province": {"type": "string", "description": "Provinsi spesifik, kosongkan jika tidak disebut."},
     "title": {"type": "string"},
-    "body": {"type": "string", "description": "1-3 kalimat. Kuantitatif (angka/persentase) kalau tersedia di berita, kualitatif/naratif kalau tidak."},
-    "source_id": {"type": "integer", "description": "Untuk berita RSS: salin PERSIS angka ID dari field 'ID' pada data. Untuk berita KORAN CETAK (OCR): WAJIB isi -1."},
-    "source_name": {"type": "string", "description": "Untuk RSS: nama media dari field Sumber. Untuk KORAN CETAK: format 'NAMA KORAN, HAL X (CETAK)' mis. 'BISNIS INDONESIA, HAL 9 (CETAK)'."},
+    "body": {"type": "string", "description": "1-3 kalimat, utamakan angka/persentase."},
+    "source_id": {"type": "integer", "description": "RSS: salin ID. Koran cetak: -1."},
+    "source_name": {"type": "string", "description": "RSS: nama media. Koran: 'NAMA KORAN, HAL X (CETAK)'."},
 }
 _ITEM_REQUIRED = ["date", "province", "title", "body", "source_id", "source_name"]
 
@@ -352,14 +329,14 @@ REPORT_SCHEMA = {
     "properties": {
         "caption": {
             "type": "string",
-            "description": "Caption singkat gaya WhatsApp (5-8 poin lintas semua section, ±300-400 kata, *bold* untuk judul, tanpa markdown heading).",
+            "description": "WhatsApp caption, 5-8 poin numbered list, ±300 kata.",
         },
         "report_title": {"type": "string"},
         "global_summary": {"type": "string"},
         "national_summary": {"type": "string"},
         "global_national": {
             "type": "array",
-            "description": "Section 1: Perkembangan Ekonomi Global dan Nasional. Maks 10 item, minimal 3 dari koran cetak.",
+            "description": "Maks 10 item, min 3 koran cetak.",
             "items": {
                 "type": "object",
                 "properties": {
@@ -372,7 +349,7 @@ REPORT_SCHEMA = {
         },
         "regions": {
             "type": "array",
-            "description": "Section 2 & 3, dipecah per wilayah kerja.",
+            "description": "Per wilayah kerja.",
             "items": {
                 "type": "object",
                 "properties": {
@@ -515,64 +492,29 @@ def summarize_with_claude(entries: list, koran_text: str) -> dict:
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
-    prompt = f"""Berikut kumpulan berita ekonomi Indonesia & global dari beberapa media hari ini:
+    prompt = f"""Berita ekonomi Indonesia & global hari ini:
 
 {raw_text}
 {koran_section}
 
-Susun laporan ekonomi dengan struktur TETAP berikut (kerangka standar laporan regional Bank
-Indonesia):
+Susun laporan ekonomi (kerangka Bank Indonesia):
 
-SECTION 1 - "global_national": Perkembangan Ekonomi Global dan Nasional
-  - "Global": pertumbuhan ekonomi global/negara maju, kebijakan moneter bank sentral utama
-    (The Fed dll), harga komoditas global, risiko geopolitik berdampak ekonomi.
-  - "Nasional": pertumbuhan PDB nasional, inflasi nasional, nilai tukar rupiah, kebijakan
-    moneter BI, neraca perdagangan, kebijakan fiskal pusat.
+SECTION 1 "global_national": Ekonomi Global & Nasional (maks 10 item, MIN 3 dari koran cetak).
+  Global: ekonomi global, kebijakan bank sentral (Fed dll), komoditas, geopolitik. WAJIB kuantitatif.
+  Nasional: PDB, inflasi, rupiah, BI rate, neraca perdagangan, fiskal pusat.
 
-  KHUSUS "Global": WAJIB muat angka/data KUANTITATIF spesifik kalau tersedia di berita.
+SECTION 2-3 "regions": Per wilayah ({", ".join(REGIONS)}), maks 2 item/kategori/wilayah.
+  demand: Fiskal, Konsumsi RT, Investasi, Ekspor.
+  sectors: Pertanian, Perdagangan, Pertambangan, Konstruksi, Industri Pengolahan, Akmamin.
+  inflation: Inflasi Inti, Inflasi VF, Inflasi AP.
 
-SECTION 2 & 3 - "regions": Perkembangan Ekonomi & Inflasi per Wilayah Kerja
-  Wilayah: {", ".join(REGIONS)}.
-  - "demand" (Sisi Permintaan): Fiskal, Konsumsi RT, Investasi, Ekspor.
-  - "sectors" (Sisi Penawaran): Pertanian, Perdagangan, Pertambangan, Konstruksi, Industri Pengolahan, Akmamin.
-  - "inflation" (Inflasi Wilayah): Inflasi Inti, Inflasi VF, Inflasi AP.
-  Maks 2 item PER KATEGORI per wilayah.
+KEYWORD: {_format_category_keywords()}
 
-KAMUS KEYWORD PER KATEGORI:
-{_format_category_keywords()}
+KORAN CETAK: source_id=-1, source_name="NAMA KORAN, HAL X (CETAK)". MIN 3-5 item koran cetak WAJIB masuk output.
 
-SUMBER DATA:
-  - Berita RSS (punya ID numerik) → gunakan di section global_national & regions
-  - Berita Koran Cetak (hasil OCR, tanpa ID) → WAJIB dimasukkan ke section global_national
-    & regions yang sesuai (set source_id = -1, source_name = "NAMA KORAN, HAL X (CETAK)"
-    — mis. "BISNIS INDONESIA, HAL 9 (CETAK)" atau "KONTAN, HAL 1 (CETAK)").
-    TIDAK ADA section koran terpisah — semua berita koran HARUS masuk ke section yang ada.
+ATURAN: Wilayah tanpa berita → skip. Kosong → array kosong. Semua summary NETRAL faktual.
 
-⚠️ WAJIB: MINIMAL 3-5 item dari KORAN CETAK harus masuk ke output JSON (global_national
-dan/atau regions). Koran cetak = data bernilai tinggi dari OCR. Jika kamu tidak memasukkan
-item koran cetak dengan source_id=-1 dan source_name berisi "(CETAK)", output dianggap GAGAL.
-Baca bagian "BERITA KORAN CETAK" di bawah dengan seksama dan ekstrak berita ekonomi darinya.
-
-ATURAN PENTING:
-- TIDAK WAJIB semua 5 wilayah terisi. Hanya yang benar-benar punya berita.
-- Sub-bagian kosong → array kosong, jangan dikarang.
-- "region_summary": NETRAL, tanpa kata penilaian/tone.
-- "global_summary" & "national_summary": NETRAL, rekap fakta.
-
-Buatkan output berikut:
-1. "global_national" - Maks 10 item total (MINIMAL 3 item harus dari koran cetak dgn source_id=-1).
-2. "global_summary" dan "national_summary"
-3. "regions" - per wilayah, termasuk "region_summary"
-4. "caption" - versi singkat gaya WhatsApp dengan NUMBERED LIST:
-   JANGAN tulis baris tanggal/sapaan di awal (sistem tambahkan otomatis).
-   Format: numbered list 5-8 poin berita terpenting lintas semua section.
-   Tiap poin: nomor + judul singkat (*bold* pakai asterisk) + 1-2 kalimat inti.
-   PENTING: Setiap poin HARUS dipisah baris baru (\n). JANGAN gabung semua poin dalam 1 baris.
-   Contoh format (perhatikan setiap poin di baris terpisah):
-   1. *Gubernur BI Mundur* — Perry Warjiyo mengundurkan diri, Destry ditunjuk sebagai pejabat sementara.\n2. *Harga Minyak Melandai* — Harga minyak turun, mendorong bursa Asia menguat.
-   Kalau ada berita dari koran cetak, sertakan dengan label 📰.
-   Total ±300-400 kata, bahasa Indonesia, ringkas, tanpa markdown heading (#).
-5. "report_title" (mis. 'Rangkuman Ekonomi Harian')."""
+"caption": numbered list 5-8 poin, *bold* judul + 1-2 kalimat, pisah \\n tiap poin. Koran cetak pakai 📰. ±300 kata, tanpa heading. Tanpa sapaan/tanggal di awal."""
 
     with client.with_options(max_retries=6).messages.stream(
         model="claude-sonnet-5",
@@ -725,6 +667,10 @@ def _build_region_page_html(region_name: str, region: dict) -> str:
     inflation = region.get("inflation", [])
     region_summary = (region.get("region_summary") or "").strip()
 
+    # Skip region yang benar-benar kosong (tidak ada berita & tidak ada summary)
+    if not demand and not sectors and not inflation and not region_summary:
+        return ""
+
     demand_html = "".join(_render_item(it, it.get("category", "")) for it in demand) or _render_empty_state(
         "Tidak ada berita (permintaan) di hari ini."
     )
@@ -746,18 +692,22 @@ def _build_region_page_html(region_name: str, region: dict) -> str:
     )
 
     return f"""
-    <div class="content-page region-page">
-        <div class="section-head">
-            <span class="section-title">{html.escape(region_name)}</span>
+    <div class="region-block">
+        <div class="region-header">
+            <div class="section-head">
+                <span class="section-title">{html.escape(region_name)}</span>
+            </div>
+            {summary_html}
+            <div class="region-cols-label">
+                <div class="region-col-label">SISI PERMINTAAN</div>
+                <div class="region-col-label">SISI PENAWARAN (LAPANGAN USAHA)</div>
+            </div>
         </div>
-        {summary_html}
         <div class="region-cols">
             <div class="region-col">
-                <div class="subgroup-label">Sisi Permintaan</div>
                 {demand_html}
             </div>
             <div class="region-col">
-                <div class="subgroup-label">Sisi Penawaran (Lapangan Usaha)</div>
                 {sectors_html}
             </div>
         </div>
@@ -774,13 +724,15 @@ def build_html(data: dict, date_str: str) -> str:
     regions = data.get("regions", [])
     by_region_name = {r.get("region_name"): r for r in regions}
 
+    region_blocks = "".join(
+        _build_region_page_html(region_name, by_region_name.get(region_name))
+        for region_name in REGIONS
+    )
+
     pages_html = (
         _build_highlight_page_html(data)
         + _build_global_national_page_html(data.get("global_national", []))
-        + "".join(
-            _build_region_page_html(region_name, by_region_name.get(region_name))
-            for region_name in REGIONS
-        )
+        + f'<div class="regions-flow">{region_blocks}</div>'
     )
 
     # CSS identik dengan existing (copy persis)
@@ -840,7 +792,7 @@ def build_html(data: dict, date_str: str) -> str:
     body {{
         font-family: Georgia, 'Times New Roman', 'Liberation Serif', serif;
         color: #1b2536;
-        font-size: 10.5pt;
+        font-size: 12pt;
         line-height: 1.55;
         margin: 0;
     }}
@@ -942,16 +894,16 @@ def build_html(data: dict, date_str: str) -> str:
         font-family: Georgia, 'Times New Roman', 'Liberation Serif', serif;
         font-style: italic;
         font-weight: 700;
-        font-size: 11.5pt;
+        font-size: 13pt;
         color: #0a2342;
         margin-bottom: 4px;
         padding-bottom: 2px;
         border-bottom: 1px solid #d9e2f0;
     }}
     .exec-text {{
-        font-size: 9.4pt;
+        font-size: 10.5pt;
         color: #3c4a63;
-        line-height: 1.42;
+        line-height: 1.45;
         text-align: justify;
         text-justify: inter-word;
         margin: 0;
@@ -975,14 +927,14 @@ def build_html(data: dict, date_str: str) -> str:
         font-family: Georgia, 'Times New Roman', 'Liberation Serif', serif;
         font-style: italic;
         font-variant: small-caps;
-        font-size: 15pt;
+        font-size: 16pt;
         font-weight: 700;
         color: #0a2342;
         letter-spacing: 0.03em;
     }}
     .subgroup {{ margin-bottom: 14px; }}
     .subgroup-label {{
-        font-size: 8.5pt;
+        font-size: 9.5pt;
         font-weight: 800;
         color: #b9863f;
         text-transform: uppercase;
@@ -990,7 +942,7 @@ def build_html(data: dict, date_str: str) -> str:
         margin-bottom: 8px;
     }}
     .empty-state {{
-        font-size: 9.5pt;
+        font-size: 10.5pt;
         color: #94a1b8;
         font-style: italic;
         padding: 8px 0;
@@ -1003,7 +955,7 @@ def build_html(data: dict, date_str: str) -> str:
     }}
     .item-category {{
         display: inline-block;
-        font-size: 7.5pt;
+        font-size: 8.5pt;
         font-weight: 800;
         color: #0a2342;
         background: #e6ebf3;
@@ -1014,25 +966,25 @@ def build_html(data: dict, date_str: str) -> str:
         margin-bottom: 5px;
     }}
     .item-meta {{
-        font-size: 8pt;
+        font-size: 9pt;
         color: #94a1b8;
         margin-bottom: 3px;
     }}
     .item-title {{
         font-weight: 700;
-        font-size: 11pt;
+        font-size: 12.5pt;
         color: #142743;
         margin-bottom: 3px;
     }}
     .item-body {{
         color: #3c4a63;
         margin-bottom: 4px;
-        font-size: 10pt;
+        font-size: 11pt;
         text-align: justify;
         text-justify: inter-word;
     }}
     .item-source {{
-        font-size: 8pt;
+        font-size: 9pt;
         color: #2a7ab5;
         font-weight: 600;
         letter-spacing: 0.04em;
@@ -1045,7 +997,7 @@ def build_html(data: dict, date_str: str) -> str:
         background: #eef3fc;
         border-left: 3px solid #c9a24b;
         border-radius: 4px;
-        font-size: 9.5pt;
+        font-size: 10.5pt;
         color: #33415c;
         text-align: justify;
         page-break-inside: avoid;
@@ -1053,7 +1005,7 @@ def build_html(data: dict, date_str: str) -> str:
     .direction-label {{
         display: block;
         font-weight: 800;
-        font-size: 7.5pt;
+        font-size: 8.5pt;
         color: #0a2342;
         text-transform: uppercase;
         letter-spacing: 0.08em;
@@ -1063,16 +1015,47 @@ def build_html(data: dict, date_str: str) -> str:
         page-break-before: always;
         padding-top: 2px;
     }}
+    /* Region sections: flow natural, tanpa page-break paksa */
+    .regions-flow {{
+        page-break-before: always;
+        padding-top: 2px;
+    }}
+    .region-block {{
+        margin-bottom: 18px;
+    }}
+    .region-block + .region-block {{
+        padding-top: 14px;
+        border-top: 2px solid #c9a24b;
+    }}
+    .region-header {{
+        page-break-inside: avoid;
+        margin-bottom: 6px;
+    }}
+    .region-cols-label {{
+        display: flex;
+        gap: 28px;
+        margin-top: 10px;
+    }}
+    .region-cols-label .region-col-label {{
+        flex: 1;
+        min-width: 0;
+        font-family: 'Georgia', 'Times New Roman', serif;
+        font-size: 9.5pt;
+        font-weight: 800;
+        color: #0a2342;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+    }}
     .region-cols {{ display: flex; gap: 28px; margin-bottom: 2px; }}
     .region-cols .region-col {{ flex: 1; min-width: 0; }}
     .region-cols .region-col:first-child {{ padding-right: 6px; border-right: 1px solid #e6ebf3; }}
     .region-cols .region-col:last-child {{ padding-left: 6px; }}
-    .region-page .item {{ margin-bottom: 9px; }}
-    .region-page .item-title {{ font-size: 10.2pt; margin-bottom: 2px; }}
-    .region-page .item-body {{ font-size: 9.2pt; line-height: 1.42; margin-bottom: 3px; }}
-    .region-page .item-meta {{ font-size: 7.5pt; margin-bottom: 2px; }}
-    .region-page .subgroup-label {{ margin-bottom: 5px; }}
-    .region-page .direction-summary {{ font-size: 9pt; padding: 7px 11px; margin-top: 0; margin-bottom: 14px; }}
+    .region-block .item {{ margin-bottom: 9px; }}
+    .region-block .item-title {{ font-size: 11.5pt; margin-bottom: 2px; }}
+    .region-block .item-body {{ font-size: 10.2pt; line-height: 1.42; margin-bottom: 3px; }}
+    .region-block .item-meta {{ font-size: 8.5pt; margin-bottom: 2px; }}
+    .region-block .subgroup-label {{ margin-bottom: 5px; }}
+    .region-block .direction-summary {{ font-size: 10pt; padding: 7px 11px; margin-top: 0; margin-bottom: 14px; }}
 </style>
 </head>
 <body>

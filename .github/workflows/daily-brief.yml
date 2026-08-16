@@ -1,11 +1,10 @@
 name: Rangkuman Berita Ekonomi Harian
 
 on:
-  # schedule dihapus — sekarang pakai cron-job.org (jam 7:00 WIB tepat) via workflow_dispatch
-  # Untuk mengaktifkan kembali cron GitHub, uncomment 2 baris di bawah:
-  # schedule:
-  #   - cron: "0 18 * * *"
-  workflow_dispatch: {}   # trigger dari cron-job.org & manual di tab "Actions"
+  schedule:
+    # 18:00 UTC = 01:00 WIB (Jakarta), setiap hari — masuk antrian lebih awal, dengan delay GitHub ~7-12 jam diharapkan jalan pagi WIB.
+    - cron: "0 18 * * *"
+  workflow_dispatch: {}   # supaya bisa juga dijalankan manual dari tab "Actions"
 
 permissions:
   contents: write   # perlu untuk commit+push PDF hasil generate ke repo
