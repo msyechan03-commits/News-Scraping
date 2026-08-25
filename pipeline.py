@@ -206,6 +206,10 @@ def fetch_recent_entries():
             if not _is_allowed_source(source_name, feed_region):
                 total_filtered_out += 1
                 continue
+            # Disambiguasi: buang judul yang menyebut negara asing (dari _shared.yaml)
+            if _has_foreign_country_in_title(title):
+                total_filtered_out += 1
+                continue
             seen_titles.add(title)
 
             date_label = ""
@@ -213,12 +217,18 @@ def fetch_recent_entries():
                 pub_wib = pub.astimezone(datetime.timezone(datetime.timedelta(hours=7)))
                 date_label = f"{pub_wib.day} {MONTHS_ID[pub_wib.month - 1][:3]}"
 
+            link = e.get("link", "").strip()
+            domain = _domain_of(source_href or link)
+            tier = _source_tier(domain)
+
             entries.append({
                 "title": title,
                 "summary": e.get("summary", "").strip(),
-                "link": e.get("link", "").strip(),
+                "link": link,
                 "source_name": source_name,
                 "source_href": source_href,
+                "domain": domain,
+                "tier": tier,
                 "date_label": date_label,
             })
 
@@ -299,19 +309,142 @@ def fetch_koran_articles(date_str: str) -> str:
 # 3. Claude summarization — sama persis + tambahan koran
 # ---------------------------------------------------------------------------
 CATEGORY_KEYWORDS = {
-    "Fiskal": "APBD, APBN, belanja modal/pegawai, penyerapan anggaran, TKD, DAU, DAK, DBH, dana desa, PAD, pajak daerah, DIPA, KPPN, bansos, PKH, BLT, subsidi",
-    "Konsumsi RT": "daya beli, penjualan eceran, omzet, UMP/UMK, THR, kendaraan bermotor, KPR, e-commerce, PHK, IKK, konsumsi semen/listrik/BBM",
-    "Investasi": "PMA, PMDN, penanaman modal, BKPM, groundbreaking, ekspansi pabrik, capex, KEK, kawasan industri, OSS, PSN, IKN, Danantara, hilirisasi",
-    "Ekspor": "ekspor, neraca perdagangan, bea keluar, DMO, kontainer, TEUs, harga komoditas global, tarif impor AS, safeguard",
-    "Pertanian": "panen, luas tanam, gabah/padi/jagung, pupuk subsidi, El Nino/La Nina, TBS, replanting, perikanan, Bulog, HPP gabah, food estate",
-    "Perdagangan": "perdagangan eceran, distribusi, pasar tradisional, grosir, bongkar muat, ritel modern",
-    "Pertambangan": "IUP, batu bara, HBA, lifting minyak/gas, SKK Migas, nikel, bauksit, timah, emas, tembaga",
-    "Konstruksi": "infrastruktur, jalan tol, bendungan, bandara, pelabuhan, kontraktor BUMN, tender, properti",
-    "Industri Pengolahan": "pabrik, utilisasi, PMI manufaktur, smelter, nikel/alumina/tembaga, refinery, kilang, petrokimia",
-    "Akmamin": "TPK, okupansi hotel, wisman, wisnus, MICE, restoran, kafe",
+    # === Sisi Permintaan (demand) ===
+    "Fiskal": "APBD, APBN, belanja modal/pegawai, penyerapan anggaran, TKD, DAU, DAK, DBH, dana desa, PAD, pajak daerah, DIPA, KPPN, "
+              "bansos, PKH, BLT, subsidi, pagu infrastruktur, tanggap darurat bencana (BNPB/BPBD), pencairan termin PSN",
+    "Konsumsi RT": "daya beli, penjualan eceran, omzet, UMP/UMK, THR, kendaraan bermotor, KPR, e-commerce, PHK, IKK, IPR, SSSG, "
+                   "konsumsi semen/listrik/BBM, traffic mal, penjualan Gaikindo/AISI, harga pangan (kelangkaan)",
+    "Investasi": "PMA, PMDN, penanaman modal, BKPM, groundbreaking, MoU investasi, ekspansi pabrik, capex, KEK, kawasan industri, "
+                 "OSS, PSN, IKN, Danantara, hilirisasi, kontrak baru kontraktor (Waskita/Adhi/PP/WIKA/Hutama), COD pembangkit",
+    "Ekspor": "ekspor, neraca perdagangan, bea keluar, DMO, kontainer, TEUs, harga komoditas global, tarif impor AS, safeguard, DHE SDA",
+    # === Sisi Penawaran (sectors) — diperkaya dari YAML LU ===
+    "Pertanian": "panen raya/musim tanam, gabah/padi/jagung, produktivitas ton/ha, kekeringan, El Nino/La Nina, karhutla lahan, "
+                 "TBS/CPO, replanting/PSR, kopi/kakao/karet, perikanan tangkap, budidaya udang vaname, rumput laut, "
+                 "wereng/ulat grayak/PMK/ASF, Bulog/ID Food/Bapanas, HPP gabah, HET beras, food estate, kuota impor beras/gula, "
+                 "banjir sawah/puso, sawah terendam bencana",
+    "Perdagangan": "perdagangan besar/eceran, distributor, grosir, pasar tradisional/rakyat, ritel modern (Alfamart/Indomaret/Transmart), "
+                   "buka/tutup gerai, mal, e-commerce (Tokopedia/Shopee/Lazada/TikTok Shop), penjualan mobil/motor "
+                   "(Gaikindo/AISI/Astra/Indomobil), indikator SPE/omzet pedagang, HBKN Ramadan/Lebaran/Natal",
+    "Pertambangan": "IUP/IUPK/RKAB, kuota batu bara, HBA/HPM/HMA, lifting minyak/gas, MMSCFD/BOPD, SKK Migas/POD, "
+                    "nikel (saprolit/limonit)/bauksit/timah/emas/tembaga, panas bumi/WKP, penggalian galian C, "
+                    "korporasi (Adaro/PTBA/Vale/Antam/Freeport/Amman/PT Timah/Pertamina Hulu), gangguan operasional "
+                    "(setop produksi, banjir/longsor tambang, force majeure), tambang ilegal/PETI — arsipkan, "
+                    "smelter/hilirisasi = KONTEKS hilir (bukan output pertambangan)",
+    "Konstruksi": "PISAH tegas REALISASI vs RENCANA — sinyal output HANYA realisasi: progres fisik/persen rampung, topping off, "
+                  "diresmikan/beroperasi, kontrak baru dikantongi, order book, realisasi belanja modal/PSN, pencairan termin; "
+                  "RENCANA (groundbreaking/MoU/lelang/tender/rencana investasi) tandai leading indicator, jangan narasi triwulan berjalan; "
+                  "gangguan proyek (mangkrak/terhenti/sengketa lahan/kecelakaan konstruksi/robohnya), proyek bernama "
+                  "(Tol Trans Sumatera/Jawa, Jalan Trans Papua, Jalan Trans Sulawesi, Jalan Trans Kalimantan, jalan nasional, jalan lintas, "
+                  "proyek jalan, jembatan, flyover, underpass, IKN, Ibu Kota Nusantara, Bendungan, Kereta Cepat, Patimban, Makassar New Port, "
+                  "LRT, MRT, double track, bandara, pelabuhan, dermaga, tol), "
+                  "kontraktor BUMN (Waskita/Adhi/PP/WIKA/Hutama/Nindya), properti (Ciputra/Summarecon/BSD/Pakuwon)",
+    "Industri Pengolahan": "pabrik/smelter/kilang/kawasan industri (KEK/IMIP/IWIP/Manyar), utilisasi/PMI manufaktur, "
+                           "mamin (Indofood/Mayora/Wilmar/Salim Ivomas), logam dasar (FeNi/NPI/nickel matte/MHP/HPAL/katoda tembaga/"
+                           "alumina/baja — Krakatau Steel/Inalum/Tsingshan/Huayou/Freeport Manyar), kilang RDMP/LNG "
+                           "(Cilacap/Balikpapan/Dumai/Tuban), semen (SIG/Indocement), petrokimia/pupuk (Chandra Asri/Pupuk Indonesia/"
+                           "Petrokimia Gresik/Pupuk Kaltim), tekstil TPT/garmen, otomotif (Toyota/Daihatsu/Honda/Hyundai), "
+                           "gangguan (unplanned shutdown/turnaround/kebakaran pabrik/ledakan/kelangkaan bahan baku/PHK massal), "
+                           "regulasi (safeguard/antidumping/BMAD/hilirisasi/tax holiday/HGBT/TKDN), pabrik rusak akibat bencana",
+    "Akmamin": "TPK/okupansi hotel/rata-rata lama menginap, wisman/wisnus, load factor, hotel baru/tutup, "
+               "MICE/konferensi/festival/expo/konser/pameran (event bernama), sport tourism/marathon/lari/balapan/turnamen/kejuaraan "
+               "(Maybank Marathon, MotoGP Mandalika, F1 Powerboat), rute penerbangan baru/extra flight/direct flight, "
+               "destinasi (Bali/Labuan Bajo/Mandalika/Danau Toba/Borobudur/Likupang/Raja Ampat/Bromo/Wakatobi/Bunaken), "
+               "maskapai (Garuda/Lion/Citilink/Batik/AirAsia/Pelita/Super Air Jet), jaringan hotel (Archipelago/Accor/Santika/Aston/"
+               "Marriott/Hyatt), PHRI/ASITA, pungutan/retribusi wisata, KEK pariwisata/DPSP/KEN, "
+               "gangguan (pembatalan event/erupsi/gempa/travel advisory/penutupan bandara/wabah), efisiensi perjalanan dinas",
+    # === Inflasi ===
     "Inflasi Inti": "inflasi inti, emas perhiasan, sewa rumah, biaya pendidikan, tarif kesehatan, ekspektasi inflasi",
-    "Inflasi VF": "harga beras, cabai, bawang, daging ayam, telur, minyak goreng, daging sapi, pasokan pangan",
-    "Inflasi AP": "BBM, Pertalite, Solar, LPG 3kg, tarif listrik, tiket pesawat, angkutan, rokok, cukai",
+    "Inflasi VF": "harga beras/cabai/bawang/daging ayam/telur/minyak goreng/daging sapi, pasokan pangan, operasi pasar SPHP, "
+                  "lonjakan harga pangan akibat bencana/karhutla/gangguan distribusi",
+    "Inflasi AP": "BBM/Pertalite/Solar, LPG 3kg, tarif listrik industri/RT, tiket pesawat, angkutan, rokok/cukai",
+}
+
+# === SCORING YAML CONFIG (dari _shared.yaml + lu_*.yaml) ===
+FOREIGN_COUNTRY_BLOCKLIST = [
+    "Papua Nugini", "Papua New Guinea", "Afrika Tengah", "Malaysia", "Filipina",
+    "Australia", "Tiongkok", "India", "Thailand", "Vietnam", "Jepang",
+]
+SOURCE_TIER_1 = {"bps.go.id", "esdm.go.id", "skkmigas.go.id", "kemenperin.go.id", "pertanian.go.id",
+                 "kemendag.go.id", "pu.go.id", "kemenparekraf.go.id", "bi.go.id", "idx.co.id", "bnpb.go.id", "bmkg.go.id"}
+SOURCE_TIER_2 = {"katadata.co.id", "bisnis.com", "kontan.co.id", "cnbcindonesia.com", "investor.id",
+                 "antaranews.com", "tempo.co", "kompas.com", "detik.com", "cnnindonesia.com"}
+SOURCE_TIER_3 = {"petromindo.com", "dunia-energi.com", "tambang.co.id", "infosawit.com", "gapki.id",
+                 "sindonews.com", "bloomberg.com", "reuters.com"}
+
+MATERIALITY_TOKENS = [
+    "ton", "juta ton", "ribu ton", "unit", "kapasitas", "volume", "persen", "%",
+    "triliun", "miliar", "juta dolar", "usd", "rp",
+    "naik", "turun", "meningkat", "menurun", "tumbuh", "anjlok", "melonjak",
+    "hektare", "ha", "km", "kilometer", "meter kubik", "barel", "bopd", "mmscfd",
+    "kamar", "okupansi", "wisatawan", "orang", "juta", "ribu",
+]
+
+KORPORASI_ALL = {
+    "pertanian": ["Astra Agro", "PTPN", "Sinar Mas", "SMART", "Salim Ivomas", "Musim Mas", "Wilmar",
+                  "Asian Agri", "London Sumatra", "Sampoerna Agro", "Charoen Pokphand", "Japfa",
+                  "Bulog", "ID Food", "Bapanas", "Kementan", "KKP", "GAPKI", "GAPKINDO", "AEKI"],
+    "pertambangan": ["Adaro", "Bumi Resources", "Indo Tambangraya", "ITMG", "Bukit Asam", "PTBA",
+                     "Harum Energy", "Bayan Resources", "Kaltim Prima Coal", "KPC", "Arutmin",
+                     "Berau Coal", "Golden Energy", "Indika Energy", "Vale Indonesia", "INCO",
+                     "Antam", "Aneka Tambang", "Harita Nickel", "Weda Bay",
+                     "Merdeka Battery", "APNI", "Freeport", "Grasberg", "Amman Mineral", "Batu Hijau",
+                     "Merdeka Copper", "Agincourt", "Martabe", "PT Timah", "TINS", "MIND ID",
+                     "Pertamina Hulu", "Blok Rokan", "Blok Mahakam", "Blok Cepu", "Tangguh",
+                     "BP Berau", "Medco Energi", "SKK Migas", "Petronas", "Pertamina Geothermal",
+                     "PGEO", "Star Energy", "Supreme Energy"],
+    "industri": ["Indofood", "Mayora", "Wings", "Unilever", "Garudafood", "Krakatau Steel", "Inalum",
+                 "Gunung Raja Paksi", "Tsingshan", "Huayou", "QMB", "Halmahera Persada Lygend",
+                 "Freeport Smelter Manyar", "Chandra Asri", "Pupuk Indonesia", "Petrokimia Gresik",
+                 "Pupuk Kaltim", "Kaltim Methanol", "Lotte Chemical", "Astra International",
+                 "Toyota", "Daihatsu", "Honda Prospect", "Mitsubishi Motors", "Hyundai",
+                 "Semen Indonesia", "SIG", "Indocement", "Semen Baturaja", "Solusi Bangun",
+                 "Asia Pulp and Paper", "APP", "APRIL", "Indah Kiat", "Riau Andalan",
+                 "Kilang Pertamina"],
+    "konstruksi": ["Waskita", "Adhi Karya", "Pembangunan Perumahan", "WIKA", "Wijaya Karya",
+                   "Hutama Karya", "Nindya Karya", "Brantas Abipraya", "Amarta Karya",
+                   "Total Bangun", "Acset", "Nusa Raya Cipta", "Jaya Konstruksi",
+                   "Ciputra", "Summarecon", "Pakuwon", "BSD", "Bumi Serpong Damai",
+                   "Alam Sutera", "Lippo Karawaci", "Sinar Mas Land", "Agung Podomoro",
+                   "Jasa Marga", "Angkasa Pura", "Pelindo", "KAI", "PLN", "Perumnas", "Otorita IKN"],
+    "perdagangan": ["Alfamart", "Sumber Alfaria", "Indomaret", "Indoritel", "Transmart", "Hypermart",
+                    "Matahari", "Ace Hardware", "Mitra Adiperkasa", "MAP", "Erajaya", "Ramayana",
+                    "Hero Supermarket", "Superindo", "Tokopedia", "Shopee", "Lazada", "Blibli",
+                    "Bukalapak", "TikTok Shop", "GoTo", "Indomobil", "Gaikindo", "AISI"],
+    "akmamin": ["Archipelago International", "Accor", "Santika", "Aston", "Swiss-Belhotel",
+                "Horison", "Tauzia", "Marriott", "Hyatt", "Pullman", "Grand Mercure",
+                "Garuda Indonesia", "Lion Air", "Citilink", "Batik Air",
+                "Super Air Jet", "AirAsia Indonesia", "Pelita Air", "PHRI", "ASITA", "Kemenparekraf"],
+    "lembaga_nasional": ["Bank Indonesia", "OJK", "Kementerian Keuangan", "Kemenkeu", "Bappenas",
+                         "BKPM", "Kemendag", "Kemenperin", "ESDM", "Menko Perekonomian", "BPBD",
+                         "BNPB", "BMKG"],
+}
+
+WILAYAH_PROVINSI = {
+    "Sumatera": ["Aceh", "Banda Aceh", "Sumatera Utara", "Sumut", "Medan", "Deli Serdang",
+                 "Sumatera Barat", "Sumbar", "Padang", "Bukittinggi", "Riau", "Pekanbaru", "Dumai",
+                 "Jambi", "Sumatera Selatan", "Sumsel", "Palembang", "Bengkulu", "Lampung",
+                 "Bandar Lampung", "Kepri", "Kepulauan Riau", "Batam", "Bintan", "Bangka Belitung",
+                 "Babel", "Pangkalpinang"],
+    "Jawa": ["DKI Jakarta", "Jakarta", "Jawa Barat", "Jabar", "Bandung", "Bekasi", "Karawang",
+             "Bogor", "Cirebon", "Jawa Tengah", "Jateng", "Semarang", "Solo", "Surakarta",
+             "Cilacap", "Yogyakarta", "DIY", "Sleman", "Bantul", "Jawa Timur", "Jatim",
+             "Surabaya", "Gresik", "Sidoarjo", "Bojonegoro", "Tuban", "Banten", "Serang",
+             "Cilegon", "Tangerang"],
+    "Balinusra": ["Bali", "Denpasar", "Badung", "Ubud", "Nusa Dua", "Nusa Tenggara Barat", "NTB",
+                  "Lombok", "Mataram", "Sumbawa", "Mandalika", "Nusa Tenggara Timur", "NTT",
+                  "Kupang", "Labuan Bajo", "Flores", "Sumba"],
+    "Kalimantan": ["Kalimantan Barat", "Kalbar", "Pontianak", "Ketapang", "Kalimantan Tengah",
+                   "Kalteng", "Palangka Raya", "Sampit", "Kalimantan Selatan", "Kalsel",
+                   "Banjarmasin", "Tabalong", "Kalimantan Timur", "Kaltim", "Samarinda",
+                   "Balikpapan", "Kutai", "Berau", "IKN", "Nusantara", "Kalimantan Utara",
+                   "Kaltara", "Tarakan"],
+    "Sulampua": ["Sulawesi Utara", "Sulut", "Manado", "Bitung", "Minahasa", "Sulawesi Tengah",
+                 "Sulteng", "Palu", "Morowali", "Banggai", "Luwuk", "Sulawesi Selatan", "Sulsel",
+                 "Makassar", "Sorowako", "Luwu", "Sulawesi Tenggara", "Sultra", "Kendari",
+                 "Konawe", "Kolaka", "Pomalaa", "Gorontalo", "Sulawesi Barat", "Sulbar",
+                 "Mamuju", "Maluku", "Ambon", "Seram", "Maluku Utara", "Malut", "Ternate",
+                 "Halmahera", "Weda", "Papua Barat", "Manokwari", "Sorong", "Papua", "Jayapura",
+                 "Mimika", "Timika", "Grasberg", "Merauke"],
 }
 
 _ITEM_PROPS = {
@@ -421,6 +554,130 @@ def _format_category_keywords() -> str:
     return "\n".join(f"- {cat}: {kw}" for cat, kw in CATEGORY_KEYWORDS.items())
 
 
+# ---------------------------------------------------------------------------
+# SCORING YAML — implementasi _shared.yaml + lu_*.yaml
+# ---------------------------------------------------------------------------
+def _domain_of(url: str) -> str:
+    if not url:
+        return ""
+    try:
+        import urllib.parse as _up
+        d = _up.urlparse(url).netloc.lower()
+    except Exception:
+        return ""
+    return d[4:] if d.startswith("www.") else d
+
+
+def _source_tier(domain: str) -> str:
+    if not domain:
+        return "T4"
+    for base in SOURCE_TIER_1:
+        if base in domain:
+            return "T1"
+    for base in SOURCE_TIER_2:
+        if base in domain:
+            return "T2"
+    for base in SOURCE_TIER_3:
+        if base in domain:
+            return "T3"
+    return "T4"
+
+
+def _has_foreign_country_in_title(title: str) -> bool:
+    t = (title or "")
+    return any(cn in t for cn in FOREIGN_COUNTRY_BLOCKLIST)
+
+
+def _find_hits(text_lower: str, tokens: list) -> list:
+    hits = []
+    for tok in tokens:
+        tl = tok.lower()
+        if len(tl) < 2:
+            continue
+        if len(tl) <= 4:
+            if re.search(r'(?<![a-z0-9])' + re.escape(tl) + r'(?![a-z0-9])', text_lower):
+                hits.append(tok)
+        else:
+            if tl in text_lower:
+                hits.append(tok)
+    return hits
+
+
+def score_entry(entry: dict) -> dict:
+    """Skor RSS entry. Bucket ditentukan aturan, bukan threshold skor."""
+    text = (entry.get("title", "") + " " + entry.get("summary", "")).lower()
+
+    tier = entry.get("tier", "T4")
+    tier_score = {"T1": 3, "T2": 2, "T3": 1, "T4": 0}.get(tier, 0)
+
+    mat_hits = _find_hits(text, MATERIALITY_TOKENS)
+    mat_score = min(3, len(mat_hits))
+
+    ent_hits = []
+    for group, names in KORPORASI_ALL.items():
+        for n in names:
+            if n.lower() in text:
+                ent_hits.append(n)
+    ent_score = min(6, len(ent_hits) * 2)
+
+    cat_hits = []
+    for cat, kw_str in CATEGORY_KEYWORDS.items():
+        for kw in re.split(r"[,;/()]", kw_str):
+            kw = kw.strip().lower()
+            if len(kw) >= 4 and kw in text:
+                cat_hits.append(cat)
+                break
+    cat_hits = list(dict.fromkeys(cat_hits))
+    cat_score = min(4, len(cat_hits))
+
+    reg_hits = []
+    for region, terms in WILAYAH_PROVINSI.items():
+        for t in terms:
+            if t.lower() in text:
+                reg_hits.append(region)
+                break
+    reg_hits = list(dict.fromkeys(reg_hits))
+    reg_score = 2 if reg_hits else 0
+
+    total = tier_score + mat_score + ent_score + cat_score + reg_score
+
+    if ent_score > 0 and mat_score > 0:
+        bucket = "wajib_baca"
+    elif cat_score > 0 and mat_score > 0:
+        bucket = "perlu_dicek"
+    elif cat_score > 0:
+        bucket = "kebijakan"
+    else:
+        bucket = "arsip"
+
+    return {
+        "score": total, "bucket": bucket, "tier": tier,
+        "tier_score": tier_score, "mat_score": mat_score, "ent_score": ent_score,
+        "cat_score": cat_score, "reg_score": reg_score,
+        "mat_hits": mat_hits[:4], "ent_hits": ent_hits[:3],
+        "cat_hits": cat_hits[:3], "reg_hits": reg_hits[:2] or ["-"],
+    }
+
+
+def print_scoring_summary(entries: list) -> None:
+    """Print ringkasan distribusi bucket (bukan full table, hemat log size)."""
+    dist = {"wajib_baca": 0, "perlu_dicek": 0, "kebijakan": 0, "arsip": 0}
+    dist_per_region = {r: {"wajib_baca": 0, "perlu_dicek": 0, "kebijakan": 0, "arsip": 0}
+                       for r in ["Sumatera", "Jawa", "Balinusra", "Kalimantan", "Sulampua", "-"]}
+    for e in entries:
+        s = e["_scoring"]
+        dist[s["bucket"]] += 1
+        for r in s["reg_hits"]:
+            if r in dist_per_region:
+                dist_per_region[r][s["bucket"]] += 1
+    print(f"  Distribusi bucket: wajib_baca={dist['wajib_baca']}, perlu_dicek={dist['perlu_dicek']}, "
+          f"kebijakan={dist['kebijakan']}, arsip={dist['arsip']}")
+    print(f"  Distribusi per wilayah:")
+    for r, d in dist_per_region.items():
+        print(f"    {r:<12} wajib={d['wajib_baca']:>2} cek={d['perlu_dicek']:>2} "
+              f"kebij={d['kebijakan']:>2} arsip={d['arsip']:>2}")
+
+
 def _extract_scalar(raw: str, key: str) -> str:
     m = re.search(rf'"{key}"\s*:\s*("(?:[^"\\]|\\.)*")', raw)
     if not m:
@@ -470,16 +727,28 @@ def summarize_with_claude(entries: list, koran_text: str) -> dict:
         }
 
     entries = entries[:150]
+
+    # SCORING YAML: hitung skor + bucket per entry (implementasi _shared.yaml + lu_*.yaml)
+    for e in entries:
+        e["_scoring"] = score_entry(e)
+    print_scoring_summary(entries)
+
+    # Sort DESC by score → Claude lihat wajib_baca dulu
+    entries.sort(key=lambda x: -x["_scoring"]["score"])
+
     raw_text = "\n\n".join(
         f"ID: {idx}\nJudul: {it['title']}\nTanggal: {it['date_label'] or '(tidak diketahui)'}"
-        f"\nSumber: {it['source_name'] or '(tidak diketahui)'}"
+        f"\nSumber: {it['source_name'] or '(tidak diketahui)'} [{it['_scoring']['tier']}]"
+        f"\nBucket: {it['_scoring']['bucket']} | Skor: {it['_scoring']['score']} "
+        f"| Region: {','.join(it['_scoring']['reg_hits'])} "
+        f"| Kategori: {','.join(it['_scoring']['cat_hits']) or '-'} "
+        f"| Entitas: {','.join(it['_scoring']['ent_hits']) or '-'}"
         for idx, it in enumerate(entries)
     )
 
-    # Tambahkan teks koran kalau ada
+    # Tambahkan teks koran kalau ada (tetap seperti production)
     koran_section = ""
     if koran_text:
-        # Truncate koran text kalau terlalu panjang (hemat token)
         max_koran_chars = 50000
         if len(koran_text) > max_koran_chars:
             koran_text = koran_text[:max_koran_chars] + "\n\n[... teks koran dipotong karena terlalu panjang ...]"
@@ -492,29 +761,76 @@ def summarize_with_claude(entries: list, koran_text: str) -> dict:
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
-    prompt = f"""Berita ekonomi Indonesia & global hari ini:
+    prompt = f"""Berita ekonomi Indonesia & global 24 jam terakhir. Tiap item SUDAH DI-SKOR:
+  - Bucket (wajib_baca > perlu_dicek > kebijakan > arsip) — aturan _shared.yaml
+  - Skor (tier + materialitas + entitas + kategori LU + region)
+  - Region terdeteksi dari judul
+Sudah diurutkan skor DESC.
 
 {raw_text}
 {koran_section}
 
-Susun laporan ekonomi (kerangka Bank Indonesia):
+TUGAS: Susun laporan ekonomi kerangka Bank Indonesia (Departemen Regional).
 
-SECTION 1 "global_national": Ekonomi Global & Nasional (maks 10 item, MIN 3 dari koran cetak).
-  Global: ekonomi global, kebijakan bank sentral (Fed dll), komoditas, geopolitik. WAJIB kuantitatif.
-  Nasional: PDB, inflasi, rupiah, BI rate, neraca perdagangan, fiskal pusat.
+═══════════════════════════════════════════════════
+ATURAN SELEKSI (BUCKET = PANDUAN, BUKAN CUTOFF ABSOLUT)
+═══════════════════════════════════════════════════
+1. PRIORITASKAN item bucket "wajib_baca" & "perlu_dicek".
+2. Item bucket "kebijakan" TETAP dipertimbangkan bila menyebut proyek/entitas/event bernama yg RELEVAN ke kategori LU tertentu.
+3. Item bucket "arsip" boleh diangkat bila menyebut proyek infrastruktur bernama (Tol/Bandara/Kereta Cepat/Trans Papua/IKN), event bernama, atau angka konkret di badan.
+4. Duplikat: pilih tier tertinggi (T1>T2>T3>T4), buang sisanya.
 
-SECTION 2-3 "regions": Per wilayah ({", ".join(REGIONS)}), maks 2 item/kategori/wilayah.
-  demand: Fiskal, Konsumsi RT, Investasi, Ekspor.
-  sectors: Pertanian, Perdagangan, Pertambangan, Konstruksi, Industri Pengolahan, Akmamin.
-  inflation: Inflasi Inti, Inflasi VF, Inflasi AP.
+WAJIB KELENGKAPAN:
+5. 5 wilayah ({", ".join(REGIONS)}) HARUS punya region_summary.
+6. Setiap wilayah HARUS punya minimal 1 item "demand" & 1 item "sectors" selama ada kandidat relevan (bucket apapun).
+7. Untuk Jawa: "Ekonomi Jatim/Jabar tumbuh X%" → WAJIB masuk Konsumsi RT (demand) atau sectors terkait pendorongnya.
 
-KEYWORD: {_format_category_keywords()}
+═══════════════════════════════════════════════════
+KORAN CETAK
+═══════════════════════════════════════════════════
+Item koran (blok "BERITA KORAN CETAK") WAJIB juga dipertimbangkan (tidak punya bucket/skor karena bukan RSS).
+Format: source_id=-1, source_name="NAMA KORAN, HAL X (CETAK)". MIN 3-5 item koran cetak WAJIB masuk output.
 
-KORAN CETAK: source_id=-1, source_name="NAMA KORAN, HAL X (CETAK)". MIN 3-5 item koran cetak WAJIB masuk output.
+═══════════════════════════════════════════════════
+STRUKTUR
+═══════════════════════════════════════════════════
+SECTION 1 "global_national" (maks 10 item):
+  Global: ekonomi global, bank sentral (Fed/ECB), komoditas, geopolitik. WAJIB kuantitatif.
+  Nasional: PDB, inflasi, rupiah, BI rate, neraca perdagangan, fiskal pusat, bencana skala nasional.
+SECTION 2 "regions" per wilayah, maks 2 item/kategori:
+  demand → Fiskal, Konsumsi RT, Investasi, Ekspor
+  sectors → Pertanian, Perdagangan, Pertambangan, Konstruksi, Industri Pengolahan, Akmamin
+  inflation → Inflasi Inti, Inflasi VF, Inflasi AP
 
-ATURAN: Wilayah tanpa berita → skip. Kosong → array kosong. Semua summary NETRAL faktual.
+═══════════════════════════════════════════════════
+INTEGRASI BENCANA ALAM (JANGAN section terpisah)
+═══════════════════════════════════════════════════
+Berita bencana (gempa/banjir/longsor/erupsi/karhutla) TIDAK punya kategori sendiri — klasifikasi berdasar DAMPAK EKONOMI (dominan sectors):
+  Karhutla lahan/kebun → sectors: Pertanian | Pabrik/smelter rusak → sectors: Industri Pengolahan
+  Tambang setop banjir/longsor → sectors: Pertambangan | Jalan/jembatan/bandara rusak → sectors: Konstruksi
+  Erupsi tutup destinasi → sectors: Akmamin | Distribusi terganggu → sectors: Perdagangan
+  Lonjakan harga pangan akibat bencana → inflation: Inflasi VF | Tarif angkutan/BBM naik → inflation: Inflasi AP
+  Tanggap darurat BNPB, bansos korban, APBN darurat → demand: Fiskal
+Bencana skala nasional (>1 provinsi) → global_national scope=Nasional.
+Bencana yg HANYA korban jiwa tanpa dampak ekonomi terukur → SKIP.
 
-"caption": numbered list 5-8 poin, *bold* judul + 1-2 kalimat, pisah \\n tiap poin. Koran cetak pakai 📰. ±300 kata, tanpa heading. Tanpa sapaan/tanggal di awal."""
+═══════════════════════════════════════════════════
+ATURAN KHUSUS LU
+═══════════════════════════════════════════════════
+Konstruksi: PISAH REALISASI (progres/kontrak baru/diresmikan — sinyal output) vs RENCANA (groundbreaking/MoU/lelang — leading indicator, JANGAN dimasukkan sbg output triwulan).
+Pertambangan: smelter/hilirisasi/refinery = konteks HILIR → masuk Industri Pengolahan, BUKAN Pertambangan.
+Pertanian: pabrik CPO/gula/minyak goreng/pengolahan ikan → Industri Pengolahan, bukan Pertanian.
+
+═══════════════════════════════════════════════════
+KEYWORD (dari YAML LU)
+═══════════════════════════════════════════════════
+{_format_category_keywords()}
+
+═══════════════════════════════════════════════════
+FORMAT
+═══════════════════════════════════════════════════
+Semua summary NETRAL faktual. Wilayah tanpa berita lolos → array kosong. body: 1-3 kalimat, utamakan ANGKA.
+"caption": numbered list 5-8 poin, *bold* judul + 1-2 kalimat, pisah \\n tiap poin. Koran cetak pakai 📰, bencana berdampak ekonomi pakai ⚠️. ±300 kata, tanpa sapaan/tanggal di awal."""
 
     with client.with_options(max_retries=6).messages.stream(
         model="claude-sonnet-5",

@@ -17,3 +17,7 @@ output/report_data.json
 # Sandbox development (jangan push ke repo existing)
 wa-business-sandbox/
 .env
+test_pipeline/
+pipeline_test.py
+pipeline.py.bak*
+Upgrade prompt/
