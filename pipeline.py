@@ -210,6 +210,11 @@ def fetch_recent_entries():
             if _has_foreign_country_in_title(title):
                 total_filtered_out += 1
                 continue
+            # Filter negatif: buang judul dgn frasa non-ekonomi (doa bersama/sholawat/tahlil)
+            title_lower = title.lower()
+            if any(neg in title_lower for neg in NEGATIVE_TITLE_KEYWORDS):
+                total_filtered_out += 1
+                continue
             seen_titles.add(title)
 
             date_label = ""
@@ -320,8 +325,10 @@ CATEGORY_KEYWORDS = {
     # === Sisi Penawaran (sectors) — diperkaya dari YAML LU ===
     "Pertanian": "panen raya/musim tanam, gabah/padi/jagung, produktivitas ton/ha, kekeringan, El Nino/La Nina, karhutla lahan, "
                  "TBS/CPO, replanting/PSR, kopi/kakao/karet, perikanan tangkap, budidaya udang vaname, rumput laut, "
-                 "wereng/ulat grayak/PMK/ASF, Bulog/ID Food/Bapanas, HPP gabah, HET beras, food estate, kuota impor beras/gula, "
-                 "banjir sawah/puso, sawah terendam bencana",
+                 "SERANGAN HAMA (hama tikus/tikus sawah/wereng/ulat grayak/blast/predator alami/kerusakan tanaman/lahan diserang hama), "
+                 "penyakit ternak (PMK/ASF/flu burung/ganoderma/busuk), "
+                 "Bulog/ID Food/Bapanas, HPP gabah, HET beras, food estate, kuota impor beras/gula, "
+                 "banjir sawah/puso/sawah terendam bencana/gagal panen",
     "Perdagangan": "perdagangan besar/eceran, distributor, grosir, pasar tradisional/rakyat, ritel modern (Alfamart/Indomaret/Transmart), "
                    "buka/tutup gerai, mal, e-commerce (Tokopedia/Shopee/Lazada/TikTok Shop), penjualan mobil/motor "
                    "(Gaikindo/AISI/Astra/Indomobil), indikator SPE/omzet pedagang, HBKN Ramadan/Lebaran/Natal",
@@ -329,7 +336,9 @@ CATEGORY_KEYWORDS = {
                     "nikel (saprolit/limonit)/bauksit/timah/emas/tembaga, panas bumi/WKP, penggalian galian C, "
                     "korporasi (Adaro/PTBA/Vale/Antam/Freeport/Amman/PT Timah/Pertamina Hulu), gangguan operasional "
                     "(setop produksi, banjir/longsor tambang, force majeure), tambang ilegal/PETI — arsipkan, "
-                    "smelter/hilirisasi = KONTEKS hilir (bukan output pertambangan)",
+                    "smelter/hilirisasi = KONTEKS hilir (bukan output pertambangan), "
+                    "REGULASI BURSA MINERAL — Bursa Mineral, BMKS, IDX Mineral, OJK Bursa Mineral, transaksi tambang/sawit wajib bursa, "
+                    "SIMBARA, Bursa Komoditas Nusantara",
     "Konstruksi": "PISAH tegas REALISASI vs RENCANA — sinyal output HANYA realisasi: progres fisik/persen rampung, topping off, "
                   "diresmikan/beroperasi, kontrak baru dikantongi, order book, realisasi belanja modal/PSN, pencairan termin; "
                   "RENCANA (groundbreaking/MoU/lelang/tender/rencana investasi) tandai leading indicator, jangan narasi triwulan berjalan; "
@@ -363,6 +372,13 @@ CATEGORY_KEYWORDS = {
 FOREIGN_COUNTRY_BLOCKLIST = [
     "Papua Nugini", "Papua New Guinea", "Afrika Tengah", "Malaysia", "Filipina",
     "Australia", "Tiongkok", "India", "Thailand", "Vietnam", "Jepang",
+]
+
+# Filter negatif — judul yg mengandung frasa ini di-SKIP total (bukan berita ekonomi)
+NEGATIVE_TITLE_KEYWORDS = [
+    "doa bersama", "bersholawat", "sholawat", "istighosah", "istighotsah",
+    "tahlil", "doakan", "mendoakan", "yasinan", "khataman",
+    "misa arwah", "ibadah bersama", "renungan",
 ]
 SOURCE_TIER_1 = {"bps.go.id", "esdm.go.id", "skkmigas.go.id", "kemenperin.go.id", "pertanian.go.id",
                  "kemendag.go.id", "pu.go.id", "kemenparekraf.go.id", "bi.go.id", "idx.co.id", "bnpb.go.id", "bmkg.go.id"}
@@ -779,6 +795,7 @@ ATURAN SELEKSI (BUCKET = PANDUAN, BUKAN CUTOFF ABSOLUT)
 2. Item bucket "kebijakan" TETAP dipertimbangkan bila menyebut proyek/entitas/event bernama yg RELEVAN ke kategori LU tertentu.
 3. Item bucket "arsip" boleh diangkat bila menyebut proyek infrastruktur bernama (Tol/Bandara/Kereta Cepat/Trans Papua/IKN), event bernama, atau angka konkret di badan.
 4. Duplikat: pilih tier tertinggi (T1>T2>T3>T4), buang sisanya.
+5. SKIP TOTAL berita ritual keagamaan tanpa dampak ekonomi terukur: doa bersama, sholawat/bersholawat, istighosah, tahlil, misa arwah. Meskipun terhubung ke bencana/wilayah, ini bukan berita ekonomi.
 
 WAJIB KELENGKAPAN:
 5. 5 wilayah ({", ".join(REGIONS)}) HARUS punya region_summary.
