@@ -1371,17 +1371,16 @@ def build_html(data: dict, date_str: str) -> str:
         page-break-before: always;
         padding-top: 2px;
     }}
-    /* Region sections: flow natural, tanpa page-break paksa */
+    /* Region sections: 1 wilayah = 1 page (versi lama, atas permintaan user 27 Agu 2026).
+       Untuk BALIK ke layout flow natural (padat, hemat page):
+         - Ubah ".region-block" balik jadi cuma "margin-bottom: 18px"
+         - Aktifkan kembali ".region-block + .region-block { padding-top:14px; border-top:2px solid #c9a24b; }" */
     .regions-flow {{
-        page-break-before: always;
         padding-top: 2px;
     }}
     .region-block {{
+        page-break-before: always;   /* 1 wilayah = 1 page */
         margin-bottom: 18px;
-    }}
-    .region-block + .region-block {{
-        padding-top: 14px;
-        border-top: 2px solid #c9a24b;
     }}
     .region-header {{
         page-break-inside: avoid;
