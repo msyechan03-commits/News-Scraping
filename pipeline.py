@@ -321,7 +321,7 @@ CATEGORY_KEYWORDS = {
                    "konsumsi semen/listrik/BBM, traffic mal, penjualan Gaikindo/AISI, harga pangan (kelangkaan)",
     "Investasi": "PMA, PMDN, penanaman modal, BKPM, groundbreaking, MoU investasi, ekspansi pabrik, capex, KEK, kawasan industri, "
                  "OSS, PSN, IKN, Danantara, hilirisasi, kontrak baru kontraktor (Waskita/Adhi/PP/WIKA/Hutama), COD pembangkit",
-    "Ekspor": "ekspor, neraca perdagangan, bea keluar, DMO, kontainer, TEUs, harga komoditas global, tarif impor AS, safeguard, DHE SDA",
+    "Ekspor": "ekspor, neraca perdagangan, bea keluar, DMO, kontainer, TEUs, harga komoditas global, tarif impor AS, safeguard, DHE SDA, DSI, Danantara, Danantara Sumberdaya Indonesia, Nikel, Bauksit, Timah, Emas, Tembaga, Freeport, Grasberg, Amman Mineral, Batu Hijau, Merdeka Copper, Agincourt, Martabe, Pertamina Hulu, Blok Rokan, Blok Mahakam, Blok Cepu, Tangguh, BP Berau, Medco Energi, SKK Migas, Petronas, Pertamina Geothermal, PGEO, Star Energy, Supreme Energy, CPO",
     # === Sisi Penawaran (sectors) — diperkaya dari YAML LU ===
     "Pertanian": "panen raya/musim tanam, gabah/padi/jagung, produktivitas ton/ha, kekeringan, El Nino/La Nina, karhutla lahan, "
                  "TBS/CPO, replanting/PSR, kopi/kakao/karet, perikanan tangkap, budidaya udang vaname, rumput laut, "
@@ -801,6 +801,18 @@ WAJIB KELENGKAPAN:
 5. 5 wilayah ({", ".join(REGIONS)}) HARUS punya region_summary.
 6. Setiap wilayah HARUS punya minimal 1 item "demand" & 1 item "sectors" selama ada kandidat relevan (bucket apapun).
 7. Untuk Jawa: "Ekonomi Jatim/Jabar tumbuh X%" → WAJIB masuk Konsumsi RT (demand) atau sectors terkait pendorongnya.
+
+REPLIKASI REGIONAL (WAJIB) — berita nasional dgn implikasi wilayah spesifik HARUS di-echo ke section wilayah, JANGAN cuma taruh di global_national:
+  • Sawit/CPO/emiten sawit/GAPKI/El Nino Godzilla → ALSO Sumatera & Kalimantan sectors:Pertanian (kebun sawit dominan)
+  • Beras (HET/harga naik/HAP/CBP/SPHP) → ALSO Jawa & Sulampua inflation:Inflasi VF (produksi utama)
+  • Karhutla → ALSO wilayah terdampak (Sumatera/Kalimantan) sectors:Pertanian + demand:Fiskal (tanggap darurat)
+  • Nikel/bauksit/emas/tembaga/tambang → ALSO Sulampua & Kalimantan sectors:Pertambangan
+  • DSI ekspor batubara → ALSO Sumatera & Kalimantan sectors:Pertambangan
+  • Kopdes Merah Putih/Bank Himbara → dampak fiskal daerah → demand:Fiskal di wilayah terkait bila ada info spesifik
+  • PLTS/pembangkit → sectors:Konstruksi di wilayah proyek berlangsung
+  • Wisata/hotel/turis → sectors:Akmamin di Balinusra (Bali/Lombok/Labuan Bajo)
+  • Suhu laut naik/perikanan → sectors:Pertanian (perikanan) di wilayah pesisir yg relevan
+Jangan takut duplikasi 1 topik antara global_national dan regional bila memang implikasinya multi-wilayah. Bedakan angle: global_national fokus makro nasional, regional fokus dampak lokal.
 
 ═══════════════════════════════════════════════════
 KORAN CETAK
