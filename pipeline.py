@@ -802,17 +802,28 @@ WAJIB KELENGKAPAN:
 6. Setiap wilayah HARUS punya minimal 1 item "demand" & 1 item "sectors" selama ada kandidat relevan (bucket apapun).
 7. Untuk Jawa: "Ekonomi Jatim/Jabar tumbuh X%" → WAJIB masuk Konsumsi RT (demand) atau sectors terkait pendorongnya.
 
-REPLIKASI REGIONAL (WAJIB) — berita nasional dgn implikasi wilayah spesifik HARUS di-echo ke section wilayah, JANGAN cuma taruh di global_national:
-  • Sawit/CPO/emiten sawit/GAPKI/El Nino Godzilla → ALSO Sumatera & Kalimantan sectors:Pertanian (kebun sawit dominan)
-  • Beras (HET/harga naik/HAP/CBP/SPHP) → ALSO Jawa & Sulampua inflation:Inflasi VF (produksi utama)
-  • Karhutla → ALSO wilayah terdampak (Sumatera/Kalimantan) sectors:Pertanian + demand:Fiskal (tanggap darurat)
-  • Nikel/bauksit/emas/tembaga/tambang → ALSO Sulampua & Kalimantan sectors:Pertambangan
-  • DSI ekspor batubara → ALSO Sumatera & Kalimantan sectors:Pertambangan
-  • Kopdes Merah Putih/Bank Himbara → dampak fiskal daerah → demand:Fiskal di wilayah terkait bila ada info spesifik
-  • PLTS/pembangkit → sectors:Konstruksi di wilayah proyek berlangsung
-  • Wisata/hotel/turis → sectors:Akmamin di Balinusra (Bali/Lombok/Labuan Bajo)
-  • Suhu laut naik/perikanan → sectors:Pertanian (perikanan) di wilayah pesisir yg relevan
-Jangan takut duplikasi 1 topik antara global_national dan regional bila memang implikasinya multi-wilayah. Bedakan angle: global_national fokus makro nasional, regional fokus dampak lokal.
+═══════════════════════════════════════════════════
+BERPIKIR SEBAGAI EKONOM (BUKAN MESIN KEYWORD)
+═══════════════════════════════════════════════════
+1. Prioritas berita = tingkat IMPACT EKONOMI REAL, bukan sekedar match keyword.
+2. Berita LOKAL SPESIFIK (jelas terjadi di wilayah tsb, ada angka konkret) DIDAHULUKAN atas replikasi topik nasional.
+3. Peristiwa HOTS real-time (bencana besar, insiden strategis, keputusan kebijakan berdampak wilayah, event ekonomi signifikan) HARUS masuk — sekalipun keyword mismatch.
+4. Lihat KONEKSI antar berita: global → nasional → wilayah → kebijakan. Pahami rantai sebab-akibat:
+   Contoh: suhu laut naik (global) → sektor perikanan tertekan (dampak) → wilayah pesisir NTT/Sultra terpengaruh (regional) → kebijakan BMKG/KKP (respon pemerintah).
+5. Kualitas > kuantitas: 1 item lokal real yg tajam > 3 item replikasi generik.
+
+REPLIKASI REGIONAL (KONDISIONAL — bukan otomatis):
+Boleh replikasi topik nasional ke wilayah HANYA bila salah satu terpenuhi:
+  (a) Ada berita/data pendukung yg SPESIFIK menyebut wilayah tsb (mis. produksi sawit Riau turun X%, tambang Kaltim setop Y hari)
+  (b) Implikasi finansial jelas & angka spesifik ke wilayah (mis. emiten sawit basisnya di Sumsel/Kalbar dgn kinerja terukur)
+  (c) Wilayah adalah PRODUSEN DOMINAN komoditas tsb DAN belum ada berita lokal lain yg lebih strong (batubara→Kaltim/Sumsel, CPO→Riau/Sumut, nikel→Sulteng/Malut)
+
+JANGAN replikasi kalau:
+  - Wilayah sudah punya berita lokal REAL yg lebih strong (mis. karhutla Riau real terjadi > replikasi topik sawit nasional)
+  - Cuma tempel di semua wilayah produsen tanpa proporsionalitas — pilih maksimal 1-2 wilayah dgn dampak terbesar
+  - Data tidak cukup untuk membuktikan hubungan (hindari hallucinate)
+
+Kalau ragu: taruh di global_national dgn angle makro yg tajam. Jangan paksakan di regional.
 
 ═══════════════════════════════════════════════════
 KORAN CETAK
