@@ -872,17 +872,31 @@ FORMAT
 Semua summary NETRAL faktual. Wilayah tanpa berita lolos → array kosong. body: 1-3 kalimat, utamakan ANGKA.
 "caption": numbered list 5-8 poin, *bold* judul + 1-2 kalimat, pisah \\n tiap poin. Koran cetak pakai 📰, bencana berdampak ekonomi pakai ⚠️. ±300 kata, tanpa sapaan/tanggal di awal."""
 
-    with client.with_options(max_retries=6).messages.stream(
-        model="claude-sonnet-5",
-        max_tokens=24000,
-        thinking={"type": "adaptive"},
-        output_config={
-            "effort": "low",
-            "format": {"type": "json_schema", "schema": REPORT_SCHEMA},
-        },
-        messages=[{"role": "user", "content": prompt}],
-    ) as stream:
-        resp = stream.get_final_message()
+    # Naikkan max_tokens karena prompt jadi lebih panjang (bucket + BERPIKIR EKONOM + Ekspor keyword expanded)
+    # Bungkus try/except agar workflow tidak crash total bila API gagal
+    try:
+        with client.with_options(max_retries=6).messages.stream(
+            model="claude-sonnet-5",
+            max_tokens=32000,
+            thinking={"type": "adaptive"},
+            output_config={
+                "effort": "low",
+                "format": {"type": "json_schema", "schema": REPORT_SCHEMA},
+            },
+            messages=[{"role": "user", "content": prompt}],
+        ) as stream:
+            resp = stream.get_final_message()
+    except Exception as exc:
+        print(f"  ERROR Claude API: {exc}", file=sys.stderr)
+        # Return minimal report supaya PDF tetap ter-generate & workflow tidak crash
+        return {
+            "caption": "Ada gangguan saat merangkum berita otomatis. Tim IT sedang menyelidiki.",
+            "report_title": DEFAULT_TITLE,
+            "global_summary": "Rangkuman tidak tersedia (Claude API error).",
+            "national_summary": "",
+            "global_national": [],
+            "regions": [],
+        }
 
     print(
         f"  stop_reason={resp.stop_reason}, input_tokens={resp.usage.input_tokens}, "
