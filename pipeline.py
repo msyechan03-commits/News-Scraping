@@ -1387,8 +1387,8 @@ def build_html(data: dict, date_str: str) -> str:
     }}
     /* Region sections: 1 wilayah = 1 page (versi lama, atas permintaan user 27 Agu 2026).
        Untuk BALIK ke layout flow natural (padat, hemat page):
-         - Ubah ".region-block" balik jadi cuma "margin-bottom: 18px"
-         - Aktifkan kembali ".region-block + .region-block { padding-top:14px; border-top:2px solid #c9a24b; }" */
+         - Hapus "page-break-before: always" dari .region-block
+         - Tambah rule: .region-block + .region-block dgn padding-top 14px & border-top 2px solid gold */
     .regions-flow {{
         padding-top: 2px;
     }}
