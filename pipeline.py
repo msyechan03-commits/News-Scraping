@@ -826,10 +826,22 @@ ATURAN SELEKSI (BUCKET = PANDUAN, BUKAN CUTOFF ABSOLUT)
 4. Duplikat: pilih tier tertinggi (T1>T2>T3>T4), buang sisanya.
 5. SKIP TOTAL berita ritual keagamaan tanpa dampak ekonomi terukur: doa bersama, sholawat/bersholawat, istighosah, tahlil, misa arwah. Meskipun terhubung ke bencana/wilayah, ini bukan berita ekonomi.
 
-WAJIB KELENGKAPAN:
-5. 5 wilayah ({", ".join(REGIONS)}) HARUS punya region_summary.
-6. Setiap wilayah HARUS punya minimal 1 item "demand" & 1 item "sectors" selama ada kandidat relevan (bucket apapun).
-7. Untuk Jawa: "Ekonomi Jatim/Jabar tumbuh X%" → WAJIB masuk Konsumsi RT (demand) atau sectors terkait pendorongnya.
+WAJIB KELENGKAPAN (KRITIS — PDF TIDAK BOLEH TIPIS / KOSONG):
+5. 5 wilayah ({", ".join(REGIONS)}) HARUS punya region_summary (min 2-3 kalimat).
+6. Setiap wilayah HARUS punya MINIMAL 1 item di SETIAP 3 section (demand + sectors + inflation), TANPA KECUALI.
+   - Kalau tidak ada berita SPESIFIK per wilayah → PROYEKSIKAN dari topik nasional/koran dgn angle wilayah (mis. "BI Rate 5,75% → berpengaruh KPR Jawa/Bali", "Harga daging naik → tekanan Inflasi VF di Sumatera").
+   - Kalau berita opini/analisis di koran menyebut sektor tanpa provinsi → distribusikan ke wilayah PRODUSEN utama (sawit/karet → Sumatera+Kalimantan, wisata → Balinusra, nikel → Sulampua).
+   - Kalau benar-benar tidak ada data → tulis note "Tidak ada indikator baru; kondisi mengikuti tren nasional" (JANGAN kosongkan array).
+7. Setiap wilayah TARGET total 3-6 item (bukan cuma 1-2). Jaga proporsi: demand > sectors > inflation.
+8. Untuk Jawa: "Ekonomi Jatim/Jabar tumbuh X%" → WAJIB masuk Konsumsi RT (demand) atau sectors terkait pendorongnya.
+
+FOKUS KHUSUS OPINI KORAN (KRITIS — sumber wawasan strategis):
+Section OPINI/ANALISIS di koran cetak (Kompas, Bisnis Indonesia, Neraca) memuat isu strategis yg sering LUPUT dari RSS:
+  - Ketahanan pangan (produksi beras, HPP, HET, CBP, cadangan pangan, subsidi pupuk, kesejahteraan petani)
+  - Struktur ekonomi (supply-demand imbalance, PMI, PDB komponen, pergeseran struktural)
+  - Kebijakan strategis (BI Rate outlook, hilirisasi, DHE SDA, industrialisasi, tenaga kerja)
+  - Analisis wilayah (aglomerasi ekonomi, pemerataan, TKD/DAK/DBH)
+WAJIB angkat MINIMAL 2 item dari section opini koran per generate. Tandai dgn 📰 dan sebutkan penulis/rubrik bila ada.
 
 ═══════════════════════════════════════════════════
 BERPIKIR SEBAGAI EKONOM (BUKAN MESIN KEYWORD)

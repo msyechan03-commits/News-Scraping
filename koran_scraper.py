@@ -44,6 +44,7 @@ except ImportError:
 # koran di browser. Bisnis Indonesia sudah diketahui (812219 dari screenshot),
 # sisanya perlu dicek.
 NEWSPAPERS = {
+    # === 3 KORAN UTAMA (7 Sep 2026, atas arahan atasan) ===
     "bisnis_indonesia": {
         "name": "Bisnis Indonesia",
         "epaper_id": "812219",
@@ -54,16 +55,22 @@ NEWSPAPERS = {
         "epaper_id": "812043",
         "dashboard_id": "",
     },
-    "harian_kontan": {
-        "name": "Harian Kontan",
-        "epaper_id": "812055",
-        "dashboard_id": "",
+    "kompas": {
+        "name": "Kompas",
+        "epaper_id": "833035",   # dari /epaperpdf/833035/2026-09-07
+        "dashboard_id": "1013",  # dari /dashboard/1013
     },
-    "investor_daily": {
-        "name": "Investor Indonesia",
-        "epaper_id": "812183",
-        "dashboard_id": "",
-    },
+    # === Dinonaktifkan (comment out) — bila mau aktifkan lagi, hilangkan '#' ===
+    # "harian_kontan": {
+    #     "name": "Harian Kontan",
+    #     "epaper_id": "812055",
+    #     "dashboard_id": "",
+    # },
+    # "investor_daily": {
+    #     "name": "Investor Indonesia",
+    #     "epaper_id": "812183",
+    #     "dashboard_id": "",
+    # },
 }
 
 BASE_URL = "https://eperpus.dotsolution.net"
@@ -227,6 +234,25 @@ def _find_pdf_url(html: str, page_url: str) -> str:
     return ""
 
 
+def _indo_date_to_iso(date_str: str) -> str:
+    """Konversi 'Senin, 7 September 2026' → '2026-09-07'.
+    Return '' bila format tidak dikenali."""
+    import re
+    _MONTHS_ID = {
+        "Januari": 1, "Februari": 2, "Maret": 3, "April": 4, "Mei": 5, "Juni": 6,
+        "Juli": 7, "Agustus": 8, "September": 9, "Oktober": 10, "November": 11, "Desember": 12,
+    }
+    # Cari pola "<day> <month_id> <year>" di dalam string
+    m = re.search(r'(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})', date_str)
+    if not m:
+        return ""
+    day, month_name, year = m.group(1), m.group(2), m.group(3)
+    month_num = _MONTHS_ID.get(month_name.capitalize())
+    if not month_num:
+        return ""
+    return f"{year}-{month_num:02d}-{int(day):02d}"
+
+
 def download_pdf(session: requests.Session, newspaper_key: str, date_str: str) -> str:
     """Download PDF koran untuk tanggal tertentu. Return path file PDF."""
     paper = NEWSPAPERS.get(newspaper_key)
@@ -239,18 +265,37 @@ def download_pdf(session: requests.Session, newspaper_key: str, date_str: str) -
         print(f"SKIP: {paper['name']} — epaper_id belum diisi (cek URL di browser)")
         return ""
 
-    viewer_url = f"{BASE_URL}/epaperpdf/{epaper_id}/{date_str}"
+    # Coba 2 format tanggal: Indonesia dulu (Bisnis/Neraca), fallback ISO (Kompas)
+    date_formats_to_try = [date_str]
+    iso_date = _indo_date_to_iso(date_str)
+    if iso_date and iso_date != date_str:
+        date_formats_to_try.append(iso_date)
+
     print(f"\nDownload {paper['name']} ({date_str})...")
-    print(f"  Viewer URL: {viewer_url}")
+
+    resp = None
+    used_date_str = date_str
+    for dt_fmt in date_formats_to_try:
+        viewer_url = f"{BASE_URL}/epaperpdf/{epaper_id}/{dt_fmt}"
+        print(f"  Coba viewer URL: {viewer_url}")
+        try:
+            resp = session.get(viewer_url, timeout=30)
+            print(f"  Viewer status: {resp.status_code}, Content-Type: {resp.headers.get('content-type', '?')}")
+            if resp.status_code == 200:
+                used_date_str = dt_fmt
+                break
+            else:
+                print(f"  Format tanggal {dt_fmt!r} gagal (HTTP {resp.status_code}), coba format berikutnya...")
+        except requests.RequestException as exc:
+            print(f"  ERROR request: {exc}")
+
+    if resp is None or resp.status_code != 200:
+        print(f"  GAGAL SEMUA FORMAT TANGGAL untuk {paper['name']}")
+        return ""
+
+    date_str = used_date_str  # pakai format yg berhasil untuk penamaan file
 
     try:
-        # Langkah 1: Ambil halaman viewer
-        resp = session.get(viewer_url, timeout=30)
-        print(f"  Viewer status: {resp.status_code}, Content-Type: {resp.headers.get('content-type', '?')}")
-
-        if resp.status_code != 200:
-            print(f"  GAGAL: HTTP {resp.status_code}")
-            return ""
 
         content_type = resp.headers.get("content-type", "")
 
