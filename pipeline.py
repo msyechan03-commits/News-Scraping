@@ -69,6 +69,9 @@ _REGION_QUERY_TERMS = {
 RSS_FEEDS = [
     ("https://news.google.com/rss/search?q=ekonomi+indonesia+when:1d&hl=id&gl=ID&ceid=ID:id", None),
     ("https://news.google.com/rss/search?q=bisnis+OR+market+OR+bursa+indonesia+when:1d&hl=id&gl=ID&ceid=ID:id", None),
+    # Feed khusus mineral/tambang/energi — capture RKAB/IUP/regulasi minerba yg sering luput dari query "ekonomi/bisnis"
+    ("https://news.google.com/rss/search?q=tambang+OR+RKAB+OR+IUP+OR+ESDM+OR+minerba+indonesia+when:1d&hl=id&gl=ID&ceid=ID:id", None),
+    ("https://news.google.com/rss/search?q=nikel+OR+%22batu+bara%22+OR+bauksit+OR+timah+OR+emas+OR+tembaga+indonesia+when:1d&hl=id&gl=ID&ceid=ID:id", None),
 ] + [
     (f"https://news.google.com/rss/search?q=%28investasi+OR+ekonomi+OR+inflasi%29+{terms}+when:1d&hl=id&gl=ID&ceid=ID:id", region)
     for region, terms in _REGION_QUERY_TERMS.items()
@@ -85,6 +88,10 @@ NATIONAL_SOURCES = [
     "IDX Channel", "Validnews", "Kumparan", "SWA.co.id", "Marketeers",
     "The Jakarta Post", "Jakarta Globe", "Reuters", "Wall Street Journal",
     "Financial Times", "The Economist",
+    # Spesialis energi/mining/komoditas (agar berita RKAB/IUP/minerba lolos filter sumber)
+    "Petromindo", "Dunia-Energi", "Dunia Energi", "Tambang.co.id", "Tambang",
+    "Minergynews", "Katadata Energy", "IESR", "Infosawit", "GAPKI",
+    "Sindonews", "Media Perkebunan", "Pupuk-indonesia", "Migas Review",
 ]
 
 REGIONAL_SOURCES = {
@@ -786,7 +793,29 @@ Sudah diurutkan skor DESC.
 {raw_text}
 {koran_section}
 
-TUGAS: Susun laporan ekonomi kerangka Bank Indonesia (Departemen Regional).
+TUGAS: Susun laporan ekonomi kerangka Bank Indonesia — Departemen Regional (DR).
+
+═══════════════════════════════════════════════════
+MINDSET: EKONOM DR BANK INDONESIA
+═══════════════════════════════════════════════════
+Anda menyusun laporan untuk analis kebijakan moneter/fiskal & pemantau ekonomi daerah.
+Perspektif HOLISTIK: hubungkan global → nasional → wilayah → kebijakan → dampak sektor riil.
+Bedakan level impact: peristiwa mikro (1 gerai buka) vs makro (RKAB nasional dipangkas).
+Prioritaskan berita yg mengubah OUTLOOK: regulasi minerba (RKAB/IUP/kuota), moneter (BI-Rate/inflasi/rupiah), fiskal (APBN/APBD/subsidi), gangguan pasokan (bencana/insiden), dinamika permintaan (konsumsi RT/investasi swasta).
+
+TOPIK STRATEGIS WAJIB MASUK bila muncul di data (jangan skip meski hanya 1 sumber):
+  ★ RKAB (Rencana Kerja & Anggaran Biaya tambang) — PRIORITAS SANGAT TINGGI (setara bencana alam).
+    Semua berita menyebut "RKAB" WAJIB masuk output: RKAB disetujui/ditolak/direvisi, kuota produksi, target volume,
+    RKAB 2026/2027, revisi RKAB, konsolidasi RKAB. Tandai ★ di judul PDF.
+  • Regulasi minerba lain: IUP/IUPK, moratorium tambang, relaksasi ekspor ore, PNBP minerba, tarif royalti, HBA
+  • Regulasi fiskal: perubahan pagu APBN/APBD, DAU/DAK/DBH, insentif pajak baru, subsidi BBM/listrik
+  • Regulasi moneter: BI-Rate, kebijakan makroprudensial, DHE SDA, GIRO wajib
+  • Peristiwa strategis: force majeure tambang/kilang, kebijakan hilirisasi, PSN baru, kepailitan korporasi besar
+
+ATURAN ANTI-DUPLIKASI (untuk topik strategis, khususnya RKAB):
+  - 1 peristiwa RKAB yg sama diliput banyak media → ambil HANYA 1 item dari sumber tier tertinggi (T1>T2>T3>T4)
+  - PENGECUALIAN: RKAB dari korporasi/wilayah BERBEDA boleh dobel (mis. "PTBA susun RKAB 2027" + "ITMG revisi RKAB 2026 kuota 23 juta ton" = 2 item terpisah)
+  - Kalau RKAB nasional (kebijakan umum) + RKAB spesifik korporasi = boleh 1 item nasional di global_national + 1 item korporasi di sectors:Pertambangan wilayah terkait
 
 ═══════════════════════════════════════════════════
 ATURAN SELEKSI (BUCKET = PANDUAN, BUKAN CUTOFF ABSOLUT)
