@@ -147,19 +147,34 @@ try:
 except Exception as exc:
     bad(f"gagal membaca daftar bucket: {str(exc)[:160]}")
 
-try:
-    probe = b"preflight check_supabase.py"
-    name = "_preflight_check.txt"
+# Bucket biasanya dibatasi MIME type tertentu (mis. 'pdfs' hanya application/pdf),
+# jadi berkas uji harus memakai tipe yang sama dengan yang dipakai pipeline.
+PROBES = [
+    ("pdfs", "_preflight_check.pdf", b"%PDF-1.4\n%%EOF\n", "application/pdf"),
+    ("markdown", "_preflight_check.md", b"# preflight check_supabase.py\n", "text/markdown"),
+]
+for bucket, name, payload, ctype in PROBES:
     try:
-        client.storage.from_("pdfs").remove([name])
-    except Exception:
-        pass
-    client.storage.from_("pdfs").upload(name, probe, {"content-type": "text/plain"})
-    good("upload uji ke bucket 'pdfs' berhasil")
-    client.storage.from_("pdfs").remove([name])
-    good("berkas uji berhasil dihapus kembali")
-except Exception as exc:
-    bad(f"upload uji ke bucket 'pdfs' gagal: {str(exc)[:160]}")
+        try:
+            client.storage.from_(bucket).remove([name])
+        except Exception:
+            pass
+        client.storage.from_(bucket).upload(name, payload, {"content-type": ctype})
+        good(f"upload uji ke bucket '{bucket}' berhasil ({ctype})")
+        try:
+            client.storage.from_(bucket).remove([name])
+            good(f"berkas uji di '{bucket}' berhasil dihapus kembali")
+        except Exception as exc:
+            bad(f"gagal hapus berkas uji '{bucket}/{name}' — hapus manual: {str(exc)[:110]}")
+    except Exception as exc:
+        msg = str(exc)
+        hint = ""
+        if "InvalidMimeType" in msg or "mime type" in msg:
+            hint = (f"  -> bucket '{bucket}' menolak {ctype}. Cek Allowed MIME types "
+                    f"di Storage > {bucket} > Settings.")
+        elif "Bucket not found" in msg:
+            hint = f"  -> bucket '{bucket}' belum dibuat."
+        bad(f"upload uji ke bucket '{bucket}' gagal: {msg[:140]}{hint}")
 
 # --------------------------------------------------------------- ringkasan
 step("RINGKASAN")

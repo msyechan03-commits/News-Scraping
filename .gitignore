@@ -24,3 +24,6 @@ Upgrade prompt/
 
 # Office lock files
 ~$*
+
+# Virtual environment lokal
+.venv/
