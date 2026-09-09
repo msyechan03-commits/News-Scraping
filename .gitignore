@@ -21,3 +21,6 @@ test_pipeline/
 pipeline_test.py
 pipeline.py.bak*
 Upgrade prompt/
+
+# Office lock files
+~$*

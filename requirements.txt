@@ -9,3 +9,5 @@ pydyf==0.8.0
 # Koran OCR pipeline dependencies
 PyMuPDF==1.25.5
 Pillow==11.2.1
+# Supabase (DB + Storage)
+supabase==2.9.1

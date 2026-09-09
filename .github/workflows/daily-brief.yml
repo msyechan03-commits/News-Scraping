@@ -33,6 +33,12 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CNR_USERNAME: ${{ secrets.CNR_USERNAME }}
           CNR_PASSWORD: ${{ secrets.CNR_PASSWORD }}
+          # Supabase: audit DB (runs/articles/scores/ai_decisions/logs) + arsip Storage.
+          # Kalau kedua secret ini kosong, tracker otomatis nonaktif & pipeline tetap jalan.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # "true" untuk aktifkan narasi Second Brain (~+$6/bulan), "false" untuk hemat token
+          ENABLE_SECOND_BRAIN: ${{ secrets.ENABLE_SECOND_BRAIN }}
         run: python pipeline.py generate
 
       - name: Commit & push PDF ke repo

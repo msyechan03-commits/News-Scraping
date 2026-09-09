@@ -53,6 +53,30 @@ from koran_scraper import (
 )
 from koran_ocr import ocr_newspaper, _image_to_base64
 
+# Supabase tracker + Second Brain generator (opsional — pipeline tetap jalan tanpa ini)
+try:
+    from supabase_client import SupabaseTracker
+    from second_brain import generate_second_brain
+    _SUPABASE_AVAILABLE = True
+except ImportError as e:
+    print(f"WARN: modul supabase_client/second_brain tidak tersedia: {e}", file=sys.stderr)
+    _SUPABASE_AVAILABLE = False
+
+# Run yang sedang berjalan — dipakai main() untuk menandai run gagal kalau
+# pipeline berhenti di tengah jalan (kredit habis, koran gagal, WeasyPrint error, dsb.)
+_ACTIVE_TRACKER = None
+_ACTIVE_RUN_ID = None
+
+
+def _register_active_run(tracker, run_id):
+    global _ACTIVE_TRACKER, _ACTIVE_RUN_ID
+    _ACTIVE_TRACKER, _ACTIVE_RUN_ID = tracker, run_id
+
+
+def _clear_active_run():
+    global _ACTIVE_TRACKER, _ACTIVE_RUN_ID
+    _ACTIVE_TRACKER, _ACTIVE_RUN_ID = None, None
+
 # ---------------------------------------------------------------------------
 # 1. RSS Feeds — COPY PERSIS dari existing scrape_and_send.py
 # ---------------------------------------------------------------------------
@@ -1671,25 +1695,63 @@ def cmd_generate():
     date_str = format_date_id(date_now)
     date_iso = date_now.strftime("%Y-%m-%d")
 
+    # Step 0: Supabase tracker (audit DB + Storage). Fail-safe: kalau credential
+    # tidak ada / Supabase down, tracker.enabled = False dan pipeline tetap jalan.
+    tracker = None
+    run_id = None
+    if _SUPABASE_AVAILABLE:
+        try:
+            tracker = SupabaseTracker()
+            if tracker.enabled:
+                run_id = tracker.start_run(date_iso)
+                tracker.log(run_id, "INFO", "startup", f"Pipeline produksi start — {date_str}")
+                _register_active_run(tracker, run_id)
+            else:
+                tracker = None
+        except Exception as exc:
+            print(f"WARN: SupabaseTracker gagal init — lanjut tanpa audit: {exc}", file=sys.stderr)
+            tracker = None
+
+    def _track(level, stage, message, metadata=None):
+        """Log ke Supabase tanpa pernah menghentikan pipeline."""
+        if not tracker:
+            return
+        try:
+            tracker.log(run_id, level, stage, message, metadata)
+        except Exception as exc:
+            print(f"WARN: gagal log ke Supabase ({stage}): {exc}", file=sys.stderr)
+
     # Step 1: RSS
     print("\n" + "=" * 50)
     print("TAHAP: Mengambil berita RSS")
     print("=" * 50)
     entries = fetch_recent_entries()
     print(f"Ditemukan {len(entries)} berita RSS dalam {HOURS_LOOKBACK} jam terakhir.")
+    _track("INFO", "fetch_rss", f"Fetched {len(entries)} entries dari RSS")
 
     # Step 2: Koran OCR
     koran_text = fetch_koran_articles(date_iso)
     if koran_text:
         print(f"\nTeks koran: {len(koran_text)} karakter dari OCR")
+        _track("INFO", "koran", f"OCR {len(koran_text)} karakter dari koran cetak")
     else:
         print("\nTidak ada teks koran (skip OCR)")
+        _track("WARN", "koran", "Koran cetak tidak tersedia / gagal diunduh")
 
     # Step 3: Rangkum dengan Claude
     print("\n" + "=" * 50)
     print("TAHAP: Merangkum dengan Claude")
     print("=" * 50)
     data = summarize_with_claude(entries, koran_text)
+
+    # Step 3b: Simpan articles + scores + keputusan AI ke Supabase
+    article_id_map = {}
+    if tracker and entries:
+        try:
+            article_id_map = tracker.insert_articles_batch(run_id, entries)
+            tracker.insert_ai_decisions(run_id, article_id_map, entries, data)
+        except Exception as exc:
+            print(f"WARN: gagal simpan articles/scores ke Supabase: {exc}", file=sys.stderr)
 
     # Step 4: SIMPAN DATA DULU sebelum build PDF (supaya tidak hilang kalau PDF gagal)
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -1719,6 +1781,62 @@ def cmd_generate():
     print("TAHAP: Membangun PDF")
     print("=" * 50)
     build_pdf(data, date_str, pdf_path)
+    _track("INFO", "pdf", f"PDF selesai dibangun: {pdf_filename}")
+
+    # Step 6: Second Brain — narasi Markdown (~4rb kata) sebagai arsip mendalam.
+    # Dikendalikan env ENABLE_SECOND_BRAIN supaya biaya token bisa dimatikan kapan saja.
+    md_path = None
+    sb_in_tokens = 0
+    sb_out_tokens = 0
+    enable_sb = os.environ.get("ENABLE_SECOND_BRAIN", "").lower() in ("1", "true", "yes")
+    if enable_sb and _SUPABASE_AVAILABLE:
+        print("\n" + "=" * 50)
+        print("TAHAP: Second Brain — narasi Markdown")
+        print("=" * 50)
+        try:
+            sb = generate_second_brain(entries, koran_text, data, date_str)
+            sb_in_tokens = sb.get("input_tokens", 0)
+            sb_out_tokens = sb.get("output_tokens", 0)
+            md_path = os.path.join(OUTPUT_DIR, f"SecondBrain_{date_iso}.md")
+            with open(md_path, "w", encoding="utf-8") as f:
+                f.write(sb.get("markdown", ""))
+            print(f"Second Brain disimpan: {md_path} "
+                  f"({sb_in_tokens} in + {sb_out_tokens} out token)")
+            if sb.get("error"):
+                _track("WARN", "second_brain", f"Second Brain error: {sb['error']}")
+            else:
+                _track("INFO", "second_brain",
+                       f"MD dibuat ({len(sb.get('markdown', ''))} karakter)",
+                       {"input_tokens": sb_in_tokens, "output_tokens": sb_out_tokens})
+        except Exception as exc:
+            print(f"WARN: Second Brain gagal — lanjut tanpa MD: {exc}", file=sys.stderr)
+            _track("ERROR", "second_brain", f"Gagal generate: {exc}")
+            md_path = None
+    elif enable_sb:
+        print("Second Brain aktif tapi modul tidak tersedia — dilewati.")
+
+    # Step 7: Upload arsip ke Supabase Storage + tutup run
+    if tracker:
+        try:
+            pdf_url = tracker.upload_pdf(date_iso, pdf_path)
+            md_url = None
+            if md_path and os.path.exists(md_path):
+                md_url = tracker.upload_markdown(date_iso, md_path)
+            tracker.finish_run(
+                run_id,
+                status="success",
+                rss_count=len(entries),
+                koran_pages=(len(koran_text) // 5000) if koran_text else 0,
+                articles_scored=len(article_id_map),
+                pdf_url=pdf_url,
+                markdown_url=md_url,
+                input_tokens_secondbrain=sb_in_tokens,
+                output_tokens_secondbrain=sb_out_tokens,
+            )
+        except Exception as exc:
+            print(f"WARN: gagal upload/finalize Supabase: {exc}", file=sys.stderr)
+        finally:
+            _clear_active_run()
 
 
 def cmd_send():
@@ -1778,7 +1896,26 @@ def main():
             print(f"  python pipeline.py {cmd}")
         sys.exit(0)
 
-    commands[mode]()
+    try:
+        commands[mode]()
+    except BaseException as exc:
+        # Tandai run sebagai gagal di Supabase supaya bisa ditelusuri esok hari,
+        # lalu teruskan exception-nya agar exit code GitHub Actions tetap merah.
+        if _ACTIVE_TRACKER is not None and _ACTIVE_RUN_ID is not None:
+            try:
+                _ACTIVE_TRACKER.log(_ACTIVE_RUN_ID, "ERROR", mode,
+                                    f"{type(exc).__name__}: {exc}")
+                _ACTIVE_TRACKER.finish_run(
+                    _ACTIVE_RUN_ID,
+                    status="failed",
+                    error_stage=mode,
+                    error_message=f"{type(exc).__name__}: {exc}"[:2000],
+                )
+            except Exception as log_exc:
+                print(f"WARN: gagal catat kegagalan ke Supabase: {log_exc}", file=sys.stderr)
+            finally:
+                _clear_active_run()
+        raise
 
 
 if __name__ == "__main__":
