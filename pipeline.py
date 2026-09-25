@@ -347,7 +347,11 @@ def fetch_koran_articles(date_str: str) -> str:
 CATEGORY_KEYWORDS = {
     # === Sisi Permintaan (demand) ===
     "Fiskal": "APBD, APBN, belanja modal/pegawai, penyerapan anggaran, TKD, DAU, DAK, DBH, dana desa, PAD, pajak daerah, DIPA, KPPN, "
-              "bansos, PKH, BLT, subsidi, pagu infrastruktur, tanggap darurat bencana (BNPB/BPBD), pencairan termin PSN",
+              "bansos, PKH, BLT, subsidi, pagu infrastruktur, tanggap darurat bencana (BNPB/BPBD), pencairan termin PSN, "
+              "PEMBIAYAAN DAERAH: obligasi daerah, surat utang daerah, municipal bond, Jakarta Bond, penerbitan obligasi daerah, "
+              "pinjaman daerah, PT SMI, Sarana Multi Infrastruktur, DSCR, Debt Service Coverage Ratio, tenor pinjaman daerah, "
+              "rating obligasi daerah, kemandirian fiskal daerah, defisit APBD, APBD-P, penerimaan pembiayaan, utang daerah, "
+              "PERPAJAKAN: PPh Pasal 22, pemungut pajak marketplace, penindakan impor ilegal, bea cukai, penerimaan pajak",
     "Konsumsi RT": "daya beli, penjualan eceran, omzet, UMP/UMK, THR, kendaraan bermotor, KPR, e-commerce, PHK, IKK, IPR, SSSG, "
                    "konsumsi semen/listrik/BBM, traffic mal, penjualan Gaikindo/AISI, harga pangan (kelangkaan)",
     "Investasi": "PMA, PMDN, penanaman modal, BKPM, groundbreaking, MoU investasi, ekspansi pabrik, capex, KEK, kawasan industri, "
@@ -516,7 +520,7 @@ REPORT_SCHEMA = {
         "national_summary": {"type": "string"},
         "global_national": {
             "type": "array",
-            "description": "Maks 10 item, min 3 koran cetak.",
+            "description": "Maks 18 item. Bagian Nasional boleh panjang. MIN 6 item koran cetak.",
             "items": {
                 "type": "object",
                 "properties": {
@@ -852,20 +856,38 @@ ATURAN SELEKSI (BUCKET = PANDUAN, BUKAN CUTOFF ABSOLUT)
 
 WAJIB KELENGKAPAN (KRITIS — PDF TIDAK BOLEH TIPIS / KOSONG):
 5. 5 wilayah ({", ".join(REGIONS)}) HARUS punya region_summary (min 2-3 kalimat).
-6. Setiap wilayah HARUS punya MINIMAL 1 item di SETIAP 3 section (demand + sectors + inflation), TANPA KECUALI.
-   - Kalau tidak ada berita SPESIFIK per wilayah → PROYEKSIKAN dari topik nasional/koran dgn angle wilayah (mis. "BI Rate 5,75% → berpengaruh KPR Jawa/Bali", "Harga daging naik → tekanan Inflasi VF di Sumatera").
-   - Kalau berita opini/analisis di koran menyebut sektor tanpa provinsi → distribusikan ke wilayah PRODUSEN utama (sawit/karet → Sumatera+Kalimantan, wisata → Balinusra, nikel → Sulampua).
-   - Kalau benar-benar tidak ada data → tulis note "Tidak ada indikator baru; kondisi mengikuti tren nasional" (JANGAN kosongkan array).
-7. Setiap wilayah TARGET total 3-6 item (bukan cuma 1-2). Jaga proporsi: demand > sectors > inflation.
+6. Setiap wilayah diusahakan punya minimal 1 item di setiap 3 section (demand + sectors + inflation).
+   Ini TARGET, bukan kewajiban yang boleh dipenuhi dengan mengarang.
+   - Kalau ada berita wilayah yang REAL dan memenuhi syarat kelayakan → pakai itu.
+   - Kalau tidak ada → tulis 1 item bertipe catatan dengan title "Tidak ada indikator baru"
+     dan body "Kondisi wilayah mengikuti tren nasional; tidak ada rilis data atau
+     peristiwa ekonomi baru dalam 24 jam terakhir." Untuk item catatan ini pakai
+     source_id=-1 dan source_name="" (kosong) — DILARANG melampirkan sumber apa pun.
+     Ini JAUH LEBIH BAIK daripada mengisi dengan berita lemah.
+   - DILARANG mengisi kisi-kisi wilayah dengan: berita seremonial, imbauan pejabat,
+     sosialisasi program, kunjungan kerja, atau pernyataan tanpa angka. Contoh yang
+     HARUS ditolak: "Dinas X imbau warga manfaatkan fitur Y", "Pemprov Z mutakhirkan
+     data potensi investasi". Item semacam ini menurunkan mutu laporan.
+   - Replikasi topik nasional ke wilayah hanya boleh mengikuti aturan REPLIKASI
+     REGIONAL di bawah, dan setiap replikasi WAJIB membawa angka spesifik wilayah.
+7. Setiap wilayah TARGET total 3-6 item, TAPI mutu di atas jumlah. Wilayah dengan
+   2 item kuat lebih baik daripada 6 item lemah. Jaga proporsi: demand > sectors > inflation.
 8. Untuk Jawa: "Ekonomi Jatim/Jabar tumbuh X%" → WAJIB masuk Konsumsi RT (demand) atau sectors terkait pendorongnya.
 
-FOKUS KHUSUS OPINI KORAN (KRITIS — sumber wawasan strategis):
-Section OPINI/ANALISIS di koran cetak (Kompas, Bisnis Indonesia, Neraca) memuat isu strategis yg sering LUPUT dari RSS:
+FOKUS KHUSUS LAPORAN MENDALAM & OPINI KORAN (KRITIS — sumber wawasan strategis):
+Rubrik In-Depth Report, Laporan Khusus, Analisis, dan Opini di koran cetak
+(Kompas, Bisnis Indonesia, Neraca) memuat isu strategis yg sering LUPUT dari RSS:
+  - Pembiayaan daerah (obligasi daerah, pinjaman daerah, PT SMI, DSCR, APBD-P,
+    kemandirian fiskal, dampak pemangkasan DBH/TKD) — PALING DEKAT dengan kerja DR
   - Ketahanan pangan (produksi beras, HPP, HET, CBP, cadangan pangan, subsidi pupuk, kesejahteraan petani)
   - Struktur ekonomi (supply-demand imbalance, PMI, PDB komponen, pergeseran struktural)
   - Kebijakan strategis (BI Rate outlook, hilirisasi, DHE SDA, industrialisasi, tenaga kerja)
+  - Perpajakan & kepabeanan (pungutan baru, penjadwalan, penindakan impor ilegal)
+  - Perbankan & kredit (undisbursed loan, NPL, penyaluran, suku bunga kredit)
+  - Energi & kelistrikan (kebutuhan listrik industri/data center, PSEL, transisi energi)
   - Analisis wilayah (aglomerasi ekonomi, pemerataan, TKD/DAK/DBH)
-WAJIB angkat MINIMAL 2 item dari section opini koran per generate. Tandai dgn 📰 dan sebutkan penulis/rubrik bila ada.
+WAJIB angkat MINIMAL 3 item dari rubrik laporan mendalam/opini koran per generate.
+Tandai dgn 📰 dan sebutkan penulis/rubrik bila ada.
 
 ═══════════════════════════════════════════════════
 BERPIKIR SEBAGAI EKONOM (BUKAN MESIN KEYWORD)
@@ -891,17 +913,67 @@ JANGAN replikasi kalau:
 Kalau ragu: taruh di global_national dgn angle makro yg tajam. Jangan paksakan di regional.
 
 ═══════════════════════════════════════════════════
-KORAN CETAK
+KORAN CETAK — SUMBER BERBAYAR, PRIORITAS SETARA BUCKET "wajib_baca"
 ═══════════════════════════════════════════════════
-Item koran (blok "BERITA KORAN CETAK") WAJIB juga dipertimbangkan (tidak punya bucket/skor karena bukan RSS).
-Format: source_id=-1, source_name="NAMA KORAN, HAL X (CETAK)". MIN 3-5 item koran cetak WAJIB masuk output.
+Koran cetak adalah langganan berbayar. Sebagian besar isinya, terutama rubrik
+laporan mendalam, TIDAK PUNYA VERSI ONLINE dan tidak akan pernah muncul di RSS.
+Karena itu nilai tambahnya paling tinggi: satu item koran yang bagus lebih
+berharga daripada tiga item RSS yang sudah ramai diberitakan.
+Item koran tidak punya bucket/skor karena bukan RSS. Perlakukan setara
+"wajib_baca" selama lolos syarat kelayakan di bawah.
+
+KUOTA: MINIMAL 6, MAKSIMAL 10 item koran cetak per terbitan.
+PENGAMAN: kuota ini HANYA berlaku bila blok "BERITA KORAN CETAK" benar-benar ada
+dan berisi teks. Kalau blok itu tidak ada atau kosong, ABAIKAN seluruh kuota koran
+dan JANGAN membuat satu pun item bersumber cetak. Lebih baik nol item koran
+daripada satu item karangan.
+Format: source_id=-1, source_name="NAMA KORAN, HAL X (CETAK)".
+
+RUBRIK YANG WAJIB DISAPU (jangan berhenti di halaman depan):
+  - In-Depth Report / Laporan Khusus / Laporan Utama (sering 2 halaman penuh,
+    bertema daerah, dan ini yang paling sering terlewat)
+  - Halaman Ekonomi & Bisnis (Kompas umumnya hal 8-10)
+  - Opini / Analisis / Kolom Pakar
+  - Editor's Choices / Ikhtisar
+
+SYARAT KELAYAKAN (KURASI KETAT — jangan masukkan semua isi koran):
+Sebuah item koran layak masuk kalau memenuhi MINIMAL SATU:
+  (a) memuat ANGKA konkret: nilai rupiah/dolar, persentase, volume, target, tenor
+  (b) memuat KEPUTUSAN atau RENCANA KEBIJAKAN yang mengikat (regulasi, PP,
+      penjadwalan pungutan, sanksi, kuota, persetujuan pembiayaan)
+  (c) menyebut ENTITAS bernama (korporasi, BUMN, pemda, lembaga) dengan
+      tindakan yang terukur
+  (d) menjelaskan MEKANISME ekonomi yang mengubah outlook sektor atau wilayah
+TOLAK item koran yang: seremonial (peresmian tanpa angka, kunjungan, imbauan,
+sosialisasi), opini tanpa data, profil perusahaan, advertorial, atau iklan.
+
+ATURAN PENEMPATAN (INI YANG SERING SALAH):
+  1. Kalau item koran punya kaitan wilayah yang JELAS (provinsi/kota disebut,
+     atau pelakunya pemda tertentu) → taruh di regions wilayah tsb.
+  2. Kalau TIDAK ada kaitan wilayah yang jelas → taruh di "global_national"
+     dengan scope="Nasional". JANGAN DIBUANG. Bagian Nasional boleh panjang.
+  3. DILARANG memaksakan item ke wilayah hanya supaya kisi-kisi wilayah terisi.
+     Salah tempat lebih merusak daripada masuk Nasional.
+  4. Kalau satu tema koran punya beberapa artikel bersambung (mis. 4 artikel
+     obligasi daerah di satu In-Depth Report), boleh diangkat 2-3 item terpisah
+     asal sudut dan angkanya berbeda, bukan pengulangan.
+
+RUJUKAN HALAMAN (WAJIB AKURAT):
+Nomor halaman HANYA boleh disalin dari penanda "--- Halaman N ---" yang persis
+mendahului artikel di blok koran. DILARANG menulis rentang seperti "HAL 2-4".
+DILARANG menebak. Kalau penanda halaman tidak terbaca, tulis
+source_name="NAMA KORAN (CETAK)" tanpa nomor halaman.
 
 ═══════════════════════════════════════════════════
 STRUKTUR
 ═══════════════════════════════════════════════════
-SECTION 1 "global_national" (maks 10 item):
+SECTION 1 "global_national" (maks 18 item — bagian Nasional SENGAJA dibuat lapang):
   Global: ekonomi global, bank sentral (Fed/ECB), komoditas, geopolitik. WAJIB kuantitatif.
-  Nasional: PDB, inflasi, rupiah, BI rate, neraca perdagangan, fiskal pusat, bencana skala nasional.
+  Nasional: PDB, inflasi, rupiah, BI rate, neraca perdagangan, fiskal pusat, bencana skala nasional,
+    perpajakan & kepabeanan, pembiayaan & utang negara, perbankan & kredit, energi & kelistrikan,
+    hilirisasi & rantai pasok industri, iklim/cuaca berdampak ekonomi nasional.
+  Ini tempat penampungan untuk item koran bagus yang tidak punya kaitan wilayah jelas.
+  Lebih baik Nasional berisi 12-15 item bermutu daripada berita bagus dibuang.
 SECTION 2 "regions" per wilayah, maks 2 item/kategori:
   demand → Fiskal, Konsumsi RT, Investasi, Ekspor
   sectors → Pertanian, Perdagangan, Pertambangan, Konstruksi, Industri Pengolahan, Akmamin
