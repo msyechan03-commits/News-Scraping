@@ -1840,6 +1840,14 @@ def cmd_generate():
     with open(PDF_FILENAME_STATE_PATH, "w", encoding="utf-8") as f:
         f.write(pdf_filename)
 
+    # Arsip caption per-tanggal (di-commit ke repo, beda dari CAPTION_PATH yg cuma
+    # pointer "caption hari ini" utk dipakai cmd_send lalu ketimpa besok). Tanpa ini,
+    # caption WhatsApp tidak pernah tersimpan permanen di mana pun.
+    captions_dir = os.path.join(OUTPUT_DIR, "captions")
+    os.makedirs(captions_dir, exist_ok=True)
+    with open(os.path.join(captions_dir, f"{date_iso}.txt"), "w", encoding="utf-8") as f:
+        f.write(caption)
+
     # Simpan data JSON (supaya bisa rebuild PDF tanpa generate ulang)
     data_path = os.path.join(OUTPUT_DIR, "report_data.json")
     with open(data_path, "w", encoding="utf-8") as f:
