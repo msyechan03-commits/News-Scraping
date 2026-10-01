@@ -37,7 +37,10 @@ import sys
 import time
 import urllib.parse
 
-import anthropic
+from openai import OpenAI
+
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+OPENROUTER_MODEL = "google/gemini-2.5-flash"
 import requests
 
 try:
@@ -279,9 +282,9 @@ def fetch_koran_articles(date_str: str) -> str:
     """Download koran, OCR, return teks gabungan semua koran.
     Hapus gambar temporary setelah selesai (hemat disk)."""
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    api_key = os.environ.get("OPENROUTER_API_KEY", "")
     if not api_key:
-        print("SKIP koran OCR: ANTHROPIC_API_KEY belum diisi")
+        print("SKIP koran OCR: OPENROUTER_API_KEY belum diisi")
         return ""
 
     cnr_user = os.environ.get("CNR_USERNAME", "")
@@ -297,7 +300,7 @@ def fetch_koran_articles(date_str: str) -> str:
     session = cnr_login()
 
     all_ocr_texts = []
-    client = anthropic.Anthropic(api_key=api_key)
+    client = OpenAI(base_url=OPENROUTER_BASE_URL, api_key=api_key)
 
     for key, info in NEWSPAPERS.items():
         pdf_path = download_pdf(session, key, date_str)
@@ -810,7 +813,7 @@ def summarize_with_claude(entries: list, koran_text: str) -> dict:
 === AKHIR BERITA KORAN CETAK ===
 """
 
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    client = OpenAI(base_url=OPENROUTER_BASE_URL, api_key=os.environ["OPENROUTER_API_KEY"])
 
     prompt = f"""Berita ekonomi Indonesia & global 24 jam terakhir. Tiap item SUDAH DI-SKOR:
   - Bucket (wajib_baca > perlu_dicek > kebijakan > arsip) — aturan _shared.yaml
@@ -1009,39 +1012,36 @@ FORMAT
 Semua summary NETRAL faktual. Wilayah tanpa berita lolos → array kosong. body: 1-3 kalimat, utamakan ANGKA.
 "caption": numbered list 5-8 poin, *bold* judul + 1-2 kalimat, pisah \\n tiap poin. Koran cetak pakai 📰, bencana berdampak ekonomi pakai ⚠️. ±300 kata, tanpa sapaan/tanggal di awal."""
 
-    # Naikkan max_tokens karena prompt jadi lebih panjang (bucket + BERPIKIR EKONOM + Ekspor keyword expanded)
     # Bungkus try/except agar workflow tidak crash total bila API gagal
     try:
-        with client.with_options(max_retries=6).messages.stream(
-            model="claude-sonnet-5",
+        resp = client.chat.completions.create(
+            model=OPENROUTER_MODEL,
             max_tokens=32000,
-            thinking={"type": "adaptive"},
-            output_config={
-                "effort": "low",
-                "format": {"type": "json_schema", "schema": REPORT_SCHEMA},
+            response_format={
+                "type": "json_schema",
+                "json_schema": {"name": "report", "strict": True, "schema": REPORT_SCHEMA},
             },
             messages=[{"role": "user", "content": prompt}],
-        ) as stream:
-            resp = stream.get_final_message()
+        )
     except Exception as exc:
-        print(f"  ERROR Claude API: {exc}", file=sys.stderr)
+        print(f"  ERROR OpenRouter API: {exc}", file=sys.stderr)
         # Return minimal report supaya PDF tetap ter-generate & workflow tidak crash
         return {
             "caption": "Ada gangguan saat merangkum berita otomatis. Tim IT sedang menyelidiki.",
             "report_title": DEFAULT_TITLE,
-            "global_summary": "Rangkuman tidak tersedia (Claude API error).",
+            "global_summary": "Rangkuman tidak tersedia (OpenRouter API error).",
             "national_summary": "",
             "global_national": [],
             "regions": [],
         }
 
+    usage = resp.usage
     print(
-        f"  stop_reason={resp.stop_reason}, input_tokens={resp.usage.input_tokens}, "
-        f"output_tokens={resp.usage.output_tokens}"
+        f"  model={resp.model}, finish_reason={resp.choices[0].finish_reason}, "
+        f"input_tokens={usage.prompt_tokens}, output_tokens={usage.completion_tokens}"
     )
 
-    text_blocks = [block.text for block in resp.content if block.type == "text"]
-    raw_json = "\n".join(text_blocks).strip()
+    raw_json = (resp.choices[0].message.content or "").strip()
 
     try:
         data = _normalize_report(json.loads(raw_json))

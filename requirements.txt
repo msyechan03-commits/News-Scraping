@@ -1,6 +1,10 @@
 feedparser==6.0.11
 requests==2.32.3
 anthropic==0.117.1
+# openai SDK dipakai sbg client OpenRouter (OpenAI-compatible) utk pipeline utama
+# (rangkuman + OCR koran) - lihat OPENROUTER_API_KEY. "anthropic" di atas dibiarkan
+# krn masih dipakai second_brain.py (fitur opsional, belum dimigrasi - lihat README).
+openai==1.58.1
 # WeasyPrint + pydyf harus dipin bareng - versi pydyf terbaru menghapus/mengubah
 # Stream.transform sehingga WeasyPrint 62.x error 'super object has no attribute transform'.
 # Pasangan 60.2 + 0.8.0 ini kombinasi stabil yang teruji.

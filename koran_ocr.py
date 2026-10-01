@@ -1,11 +1,11 @@
 """
-OCR Koran via Claude Vision API
-================================
+OCR Koran via OpenRouter (Gemini 2.5 Flash vision)
+====================================================
 Script ini TERPISAH dari project existing (scrape_and_send.py).
 
 Alur:
   1. Baca manifest dari koran_scraper.py (daftar gambar per koran)
-  2. Kirim gambar per halaman ke Claude Vision API
+  2. Kirim gambar per halaman ke Gemini 2.5 Flash lewat OpenRouter
   3. Ekstrak teks berita dari tiap halaman
   4. Gabungkan jadi satu output teks per koran
 
@@ -16,11 +16,10 @@ Cara pakai:
   python koran_ocr.py --test-single gambar.png  -> Test OCR satu gambar
 
 Environment variables (dari .env):
-  ANTHROPIC_API_KEY  - API key Anthropic (sama dengan yang dipakai project existing)
+  OPENROUTER_API_KEY - API key OpenRouter (satu key utk semua model, lihat pipeline.py)
 
-Estimasi biaya:
-  ~9 halaman/koran × 4 koran = ~36 halaman/hari
-  ~$0.01/halaman (Claude Vision, gambar ~3MB) = ~$0.36/hari = ~$11/bulan
+Estimasi biaya (migrasi dari Claude Haiku ke Gemini 2.5 Flash via OpenRouter):
+  ~9 halaman/koran x 4 koran = ~36 halaman/hari
 """
 
 import base64
@@ -30,7 +29,10 @@ import os
 import sys
 import time
 
-import anthropic
+from openai import OpenAI
+
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+OPENROUTER_MODEL = "google/gemini-2.5-flash"
 
 try:
     from dotenv import load_dotenv
@@ -92,28 +94,24 @@ def _image_to_base64(image_path: str) -> tuple:
     return data, media_type
 
 
-def ocr_single_page(client: anthropic.Anthropic, image_path: str, page_num: int,
+def ocr_single_page(client: OpenAI, image_path: str, page_num: int,
                      newspaper_name: str) -> str:
-    """OCR satu halaman koran via Claude Vision. Return teks terekstrak."""
+    """OCR satu halaman koran via Gemini 2.5 Flash (OpenRouter). Return teks terekstrak."""
     b64_data, media_type = _image_to_base64(image_path)
     file_size_mb = os.path.getsize(image_path) / (1024 * 1024)
 
     print(f"  Halaman {page_num}: {os.path.basename(image_path)} ({file_size_mb:.1f} MB)...", end=" ", flush=True)
 
     try:
-        resp = client.messages.create(
-            model="claude-haiku-4-5-20251001",  # Haiku cukup untuk OCR, jauh lebih murah
+        resp = client.chat.completions.create(
+            model=OPENROUTER_MODEL,
             max_tokens=4096,
             messages=[{
                 "role": "user",
                 "content": [
                     {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": media_type,
-                            "data": b64_data,
-                        },
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{media_type};base64,{b64_data}"},
                     },
                     {
                         "type": "text",
@@ -131,17 +129,17 @@ def ocr_single_page(client: anthropic.Anthropic, image_path: str, page_num: int,
             }],
         )
 
-        text = resp.content[0].text
-        tokens = resp.usage.input_tokens + resp.usage.output_tokens
+        text = resp.choices[0].message.content or ""
+        tokens = resp.usage.prompt_tokens + resp.usage.completion_tokens
         print(f"OK ({len(text)} karakter, {tokens} tokens)")
         return text
 
-    except anthropic.APIError as exc:
+    except Exception as exc:
         print(f"ERROR: {exc}")
         return ""
 
 
-def ocr_newspaper(client: anthropic.Anthropic, newspaper_key: str,
+def ocr_newspaper(client: OpenAI, newspaper_key: str,
                    image_paths: list, newspaper_name: str) -> dict:
     """OCR semua halaman satu koran. Return dict dengan teks per halaman."""
     print(f"\nOCR {newspaper_name} ({len(image_paths)} halaman)...")
@@ -168,9 +166,9 @@ def ocr_newspaper(client: anthropic.Anthropic, newspaper_key: str,
 
 def run_ocr(date_str: str, paper_filter: str = None):
     """Jalankan OCR untuk semua koran di manifest tanggal tertentu."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    api_key = os.environ.get("OPENROUTER_API_KEY", "")
     if not api_key:
-        print("ERROR: ANTHROPIC_API_KEY belum diisi di .env")
+        print("ERROR: OPENROUTER_API_KEY belum diisi di .env")
         sys.exit(1)
 
     manifest_path = os.path.join(KORAN_DIR, f"{date_str}_manifest.json")
@@ -182,7 +180,7 @@ def run_ocr(date_str: str, paper_filter: str = None):
     with open(manifest_path, "r") as f:
         manifest = json.load(f)
 
-    client = anthropic.Anthropic(api_key=api_key)
+    client = OpenAI(base_url=OPENROUTER_BASE_URL, api_key=api_key)
     os.makedirs(OCR_DIR, exist_ok=True)
 
     all_results = {}
@@ -235,16 +233,16 @@ def run_ocr(date_str: str, paper_filter: str = None):
 
 def test_single(image_path: str):
     """Test OCR satu gambar saja (untuk debugging)."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    api_key = os.environ.get("OPENROUTER_API_KEY", "")
     if not api_key:
-        print("ERROR: ANTHROPIC_API_KEY belum diisi di .env")
+        print("ERROR: OPENROUTER_API_KEY belum diisi di .env")
         sys.exit(1)
 
     if not os.path.exists(image_path):
         print(f"File tidak ditemukan: {image_path}")
         sys.exit(1)
 
-    client = anthropic.Anthropic(api_key=api_key)
+    client = OpenAI(base_url=OPENROUTER_BASE_URL, api_key=api_key)
     text = ocr_single_page(client, image_path, 1, "Test")
     print(f"\n{'='*50}")
     print("Hasil OCR:")
