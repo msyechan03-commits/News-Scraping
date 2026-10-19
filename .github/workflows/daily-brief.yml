@@ -44,7 +44,7 @@ jobs:
           # second_brain.py otomatis no-op (lihat kode: return error "key tidak ada"
           # tanpa crash) kalau dipaksa aktifkan tanpa key ini.
           ENABLE_SECOND_BRAIN: ${{ secrets.ENABLE_SECOND_BRAIN }}
-        run: python pipeline.py generate
+        run: python pipeline_v2.py generate
 
       - name: Commit & push PDF ke repo
         run: |
